@@ -1,0 +1,742 @@
+/* =========================
+   Today Board - Enhanced Blackboard Chalk Theme
+   ========================= */
+
+/* 增强黑板纹理 - 背景已在 styles-v2.css 中定义，这里不再覆盖 */
+/* 移除 body 背景覆盖，使用 styles-v2.css 中的统一背景 */
+
+/* 粉笔粉尘效果 - 微妙的静态效果，增强层次感 */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* 额外的粉笔灰斑点，增强层次感 */
+    background: 
+        radial-gradient(circle at 25% 40%, rgba(255,255,255,0.015) 0.5px, transparent 0.5px),
+        radial-gradient(circle at 75% 60%, rgba(255,255,255,0.01) 0.5px, transparent 0.5px);
+    background-size: 250px 250px, 300px 300px;
+    background-position: 0 0, 50px 50px;
+    pointer-events: none;
+    z-index: -1;
+    /* 静态效果，不添加动画 */
+    opacity: 0.6;
+}
+
+/* 增强粉笔按钮效果 */
+.tb-btn {
+    position: relative;
+
+    
+    background: linear-gradient(145deg, #2a2a2a, #1e1e1e);
+    border: 2px dashed rgba(255,255,255,0.3);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.3),
+        0 2px 6px rgba(0,0,0,0.4),
+        0 0 0 1px rgba(255,255,255,0.05);
+    transition: all 0.2s ease;
+}
+
+.tb-btn:hover {
+    background: linear-gradient(145deg, #303030, #242424);
+    border-color: rgba(255,255,255,0.4);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 8px rgba(0,0,0,0.3),
+        0 0 0 1px rgba(255,255,255,0.1);
+    transform: translateY(-1px);
+}
+
+.tb-btn:active {
+    transform: translateY(1px);
+    box-shadow: 
+        inset 0 3px 6px rgba(0,0,0,0.4),
+        0 1px 2px rgba(0,0,0,0.3);
+}
+
+/* 粉笔按钮文字效果 */
+.tb-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.tb-btn:hover::after {
+    opacity: 1;
+}
+
+/* 增强粉笔文字效果 */
+.tb-title,
+.tb-record-time,
+.tb-record-index,
+.tb-editor-status {
+    text-shadow: 
+        1px 1px 2px rgba(0,0,0,0.8),
+        0 0 4px rgba(255,255,255,0.1),
+        0 0 8px rgba(255,255,255,0.05);
+    color: #f8f8f8;
+}
+
+/* 粉笔记录内容 */
+.tb-record-content {
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.6);
+    line-height: 1.7;
+    letter-spacing: 0.3px;
+}
+
+/* 增强输入框粉笔效果 */
+.tb-editor-input {
+    background: linear-gradient(145deg, #252525, #1f1f1f);
+    border: 2px dashed rgba(255,255,255,0.2);
+    box-shadow: 
+        inset 0 4px 8px rgba(0,0,0,0.4),
+        0 2px 4px rgba(0,0,0,0.2);
+    caret-color: rgba(255,255,255,0.8);
+}
+
+.tb-editor-input:focus {
+    border-color: rgba(255,255,255,0.4);
+    box-shadow: 
+        inset 0 4px 8px rgba(0,0,0,0.3),
+        0 0 0 2px rgba(255,255,255,0.1);
+}
+
+/* 增强颜色面板粉笔效果 */
+.tb-color-swatch {
+    position: relative;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 70%);
+    border: 2px dashed rgba(255,255,255,0.4);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.3),
+        0 2px 4px rgba(0,0,0,0.2);
+}
+
+.tb-color-swatch:hover {
+    transform: scale(1.15) rotate(5deg);
+    border-color: rgba(255,255,255,0.6);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 8px rgba(0,0,0,0.3),
+        0 0 10px rgba(255,255,255,0.2);
+}
+
+.tb-color-swatch.is-active {
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 0 0 3px rgba(255,255,255,0.3),
+        0 0 15px rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+/* 增强滑杆粉笔效果 */
+.tb-font-slider {
+    background: linear-gradient(90deg, #2a2a2a 0%, #3a3a3a 50%, #2a2a2a 100%);
+    border: 1px dashed rgba(255,255,255,0.3);
+    border-radius: 8px;
+    height: 8px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.tb-font-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #f5f5f5 30%, #e0e0e0 70%);
+    border: 2px dashed rgba(0,0,0,0.3);
+    border-radius: 50%;
+    box-shadow: 
+        0 2px 4px rgba(0,0,0,0.3),
+        0 0 0 2px rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tb-font-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 
+        0 4px 8px rgba(0,0,0,0.2),
+        0 0 0 3px rgba(255,255,255,0.3);
+}
+
+/* 增强图钉效果 */
+.tb-record-pin {
+    position: relative;
+    background: linear-gradient(145deg, rgba(149,213,178,0.3), rgba(149,213,178,0.2));
+    border: 2px dashed rgba(255,255,255,0.4);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.3),
+        0 4px 8px rgba(0,0,0,0.3);
+}
+
+.tb-record-pin:hover {
+    transform: scale(1.2) rotate(-10deg);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 6px 12px rgba(0,0,0,0.4),
+        0 0 15px rgba(149,213,178,0.4);
+}
+
+/* 增强记录卡片粉笔效果 */
+.tb-record {
+    background: linear-gradient(145deg, #282828, #222222);
+    border: 1px dashed rgba(255,255,255,0.15);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 8px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.tb-record::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    transition: left 0.6s ease;
+}
+
+.tb-record:hover::before {
+    left: 100%;
+}
+
+.tb-record.is-pinned {
+    border: 2px dashed rgba(255,255,255,0.85) !important;
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* 增强分割线粉笔效果（导出态使用稳定的 border divider） */
+.tb-divider {
+    /* 基础样式：使用稳定的 border */
+    border-top: var(--dashed-border);
+    border-bottom: none;
+    height: 0;
+    margin-top: 12px;
+    margin-bottom: 0;
+    width: 100%;
+    display: block;
+    position: relative;
+    /* 增强效果：仅在非导出态显示 */
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+}
+
+.tb-divider::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: chalkLine 3s ease-in-out infinite;
+    /* 导出态禁用动画和伪元素 */
+}
+
+/* 导出态禁用增强效果，只使用稳定的 border */
+.is-exporting .tb-divider {
+    background: none !important;
+    background-image: none !important;
+}
+
+.is-exporting .tb-divider::after {
+    display: none !important;
+    content: none !important;
+    animation: none !important;
+}
+
+@keyframes chalkLine {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+/* 增强空状态提示 */
+.tb-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: rgba(255,255,255,0.5);
+    font-style: italic;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    position: relative;
+}
+
+.tb-empty::before {
+    content: '✏️';
+    display: block;
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+    animation: chalkFloat 4s ease-in-out infinite;
+}
+
+@keyframes chalkFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-8px) rotate(2deg); }
+}
+
+/* 增强浮动操作栏粉笔效果 */
+.tb-action-bar {
+    background: linear-gradient(145deg, #2a2a2a, #242424);
+    border: 2px dashed rgba(255,255,255,0.3);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.3),
+        0 8px 24px rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+}
+
+/* 增强图钉按钮效果 */
+.tb-pin-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.tb-pin-btn::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    transform: scale(0);
+    transition: transform 0.3s ease;
+}
+
+.tb-pin-btn:hover::before {
+    transform: scale(1);
+}
+
+/* 增强选中状态效果 */
+.tb-record.is-selected {
+    border-color: rgba(255,255,255,0.4);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 0 0 3px rgba(255,255,255,0.2),
+        0 8px 16px rgba(0,0,0,0.3);
+    background: linear-gradient(145deg, #303030, #282828);
+}
+
+/* 增强导出按钮效果 */
+.tb-btn[data-tooltip="导出"] {
+    background: linear-gradient(145deg, #3a5a3a, #2a4a2a);
+    border-color: rgba(149,213,178,0.5);
+}
+
+.tb-btn[data-tooltip="导出"]:hover {
+    background: linear-gradient(145deg, #4a6a4a, #3a5a3a);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 12px rgba(149,213,178,0.3);
+}
+
+/* 增强清空按钮效果 */
+.tb-btn[data-tooltip="清空"] {
+    background: linear-gradient(145deg, #5a3a3a, #4a2a2a);
+    border-color: rgba(228,91,91,0.5);
+}
+
+.tb-btn[data-tooltip="清空"]:hover {
+    background: linear-gradient(145deg, #6a4a4a, #5a3a3a);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 12px rgba(228,91,91,0.3);
+}
+
+/* 增强新建按钮效果 */
+.tb-btn[data-tooltip="新建"] {
+    background: linear-gradient(145deg, #4a5a6a, #3a4a5a);
+    border-color: rgba(255,255,255,0.4);
+}
+
+.tb-btn[data-tooltip="新建"]:hover {
+    background: linear-gradient(145deg, #5a6a7a, #4a5a6a);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 4px 12px rgba(255,255,255,0.2);
+}
+
+/* 语音输入功能已移除 */
+
+/* 增强图片预览效果 */
+.tb-thumb {
+    background: linear-gradient(145deg, #333333, #2a2a2a);
+    border: 1px dashed rgba(255,255,255,0.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.tb-thumb::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: left 0.6s ease;
+}
+
+.tb-thumb:hover::before {
+    left: 100%;
+}
+
+/* 增强卡片导出效果 */
+.tb-card-view {
+    background: linear-gradient(145deg, #2a2a2a, #242424);
+    border: 2px dashed rgba(255,255,255,0.3);
+    box-shadow: 
+        inset 0 4px 8px rgba(0,0,0,0.4),
+        0 8px 24px rgba(0,0,0,0.5);
+    /* P0：禁止缩放，保持原始比例 */
+    transform: none !important;
+    zoom: 1 !important;
+}
+
+/* P0：导出态禁用增强效果，确保亮度一致 */
+.is-exporting .tb-card-view {
+    background: #1B1B1B !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+/* P0：导出态保护图片样式，确保与黑板一致（max-width: 70%） */
+.is-exporting .tb-card-content .tb-record-content img.todayboard-img,
+.is-exporting .tb-record-content img.todayboard-img {
+    max-width: 70% !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 300px !important;
+    object-fit: contain !important;
+    display: inline-block !important;
+    vertical-align: middle !important;
+    border-radius: 8px !important;
+    margin: 0 !important;
+    filter: none !important;
+}
+
+/* P0：导出态保护图片容器样式 */
+.is-exporting .tb-card-content .tb-img-wrapper,
+.is-exporting .tb-img-wrapper {
+    display: block !important;
+    width: 100% !important;
+    margin: 8px 0 12px 0 !important;
+}
+
+/* 增强预览图片效果 */
+.tb-preview-image {
+    border: 2px dashed rgba(255,255,255,0.2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    filter: contrast(1.1) brightness(1.05);
+    /* P0：禁止缩放，保持原始比例 */
+    transform: none !important;
+    zoom: 1 !important;
+}
+
+/* 增强版本标签效果 */
+.tb-version-badge {
+    background: linear-gradient(145deg, #3a3a3a, #2e2e2e);
+    border: 1px dashed rgba(255,255,255,0.3);
+    box-shadow: 
+        inset 0 1px 2px rgba(0,0,0,0.3),
+        0 2px 4px rgba(0,0,0,0.2);
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* 增强日期显示效果 */
+.tb-date {
+    text-shadow: 
+        1px 1px 2px rgba(0,0,0,0.8),
+        0 0 4px rgba(255,255,255,0.1);
+    color: #f0f0f0;
+    font-weight: 500;
+}
+
+/* 增强多选模式效果 */
+.tb-action-bar.is-open {
+    animation: chalkSlideUp 0.3s ease-out;
+}
+
+@keyframes chalkSlideUp {
+    from { transform: translateY(100%) scale(0.95); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* 增强编辑界面进入效果 */
+.tb-editor-overlay.is-open {
+    animation: chalkFadeIn 0.3s ease-out;
+}
+
+@keyframes chalkFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.tb-editor.is-open {
+    animation: chalkScaleIn 0.3s ease-out;
+}
+
+@keyframes chalkScaleIn {
+    from { transform: scale(0.95) translateY(20px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* 增强工具栏按钮悬停效果 */
+.tb-editor-toolbar .tb-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.2),
+        0 6px 12px rgba(0,0,0,0.3),
+        0 0 15px rgba(255,255,255,0.1);
+}
+
+/* P0修复：插入图片按钮强制黑白样式（禁用系统彩色控件） */
+#editorAddImageBtn {
+    background: #2b2f3a !important;
+    color: #F1F1F1 !important;
+    border-color: rgba(255,255,255,0.5) !important;
+}
+
+#editorAddImageBtn.tb-btn-chalk-white {
+    background: #2b2f3a !important;
+    color: #F1F1F1 !important;
+}
+
+/* 强制图片按钮SVG图标为白色（禁用系统彩色图标） */
+#editorAddImageBtn .tb-icon-image,
+#editorAddImageBtn .tb-icon-image path,
+#editorAddImageBtn .tb-icon-image rect,
+#editorAddImageBtn .tb-icon-image circle,
+#editorAddImageBtn .tb-icon-image polyline {
+    fill: none !important;
+    stroke: rgba(255,255,255,0.85) !important;
+    stroke-width: 2 !important;
+    color: #F1F1F1 !important;
+}
+
+#editorAddImageBtn:hover .tb-icon-image path,
+#editorAddImageBtn:hover .tb-icon-image rect,
+#editorAddImageBtn:hover .tb-icon-image circle,
+#editorAddImageBtn:hover .tb-icon-image polyline {
+    stroke: rgba(255,255,255,1) !important;
+}
+
+/* 确保在所有平台（包括移动端）都使用黑白样式 */
+@media (max-width: 768px) {
+    #editorAddImageBtn {
+        background: #2b2f3a !important;
+        color: #F1F1F1 !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+    }
+    
+    #editorAddImageBtn .tb-icon-image,
+    #editorAddImageBtn .tb-icon-image path,
+    #editorAddImageBtn .tb-icon-image rect,
+    #editorAddImageBtn .tb-icon-image circle,
+    #editorAddImageBtn .tb-icon-image polyline {
+        fill: none !important;
+        stroke: rgba(255,255,255,0.85) !important;
+        stroke-width: 2 !important;
+    }
+}
+
+/* 增强样式栏效果 */
+.tb-style-bar {
+    background: linear-gradient(145deg, #2a2a2a, #242424);
+    border: 2px dashed rgba(255,255,255,0.2);
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.3),
+        0 8px 16px rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+    /* P0-3修复：确保字体栏不拦截鼠标事件，但字体栏本身可点击 */
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 40px 12px 14px; /* 右侧padding增加，为关闭按钮留出空间 */
+    position: relative;
+}
+
+/* P0修复：确保编辑器在样式编辑模式下可以鼠标/触摸选择文字（桌面端+移动端） */
+/* 关键：编辑器输入区必须始终可以接收鼠标和触摸事件（选择文字） */
+/* 依赖浏览器原生Selection API，不自己实现选词逻辑 */
+.tb-editor-input {
+    /* 确保编辑器始终可以接收鼠标和触摸事件（选择文字） */
+    pointer-events: auto !important;
+    /* 确保编辑器可以接收所有鼠标和触摸事件 */
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    /* 移动端：允许触摸选择 */
+    -webkit-touch-callout: default !important;
+    touch-action: manipulation !important;
+    /* 桌面端：确保可以双击选词、拖选 */
+    cursor: text !important;
+}
+
+/* P0修复：确保编辑器覆盖层不拦截鼠标事件（只拦截非编辑区域） */
+.tb-editor-overlay.is-open {
+    /* 覆盖层本身不拦截鼠标事件，让编辑器可以正常选择 */
+    pointer-events: none !important;
+}
+
+.tb-editor-overlay.is-open .tb-editor {
+    /* 编辑器容器可以接收鼠标事件 */
+    pointer-events: auto !important;
+}
+
+.tb-editor-overlay.is-open .tb-editor-input {
+    /* 编辑器输入区必须可以接收鼠标事件（选择文字） */
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    /* 桌面端：确保可以双击选词、拖选 */
+    cursor: text !important;
+}
+
+/* P0修复：样式编辑模式下，确保编辑器可以正常选择（不拦截任何鼠标事件） */
+.tb-editor-overlay.is-open .tb-editor-input[contenteditable="true"] {
+    /* 确保contenteditable元素可以正常接收所有鼠标事件 */
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    cursor: text !important;
+    /* 确保不被任何样式覆盖 */
+    -webkit-user-drag: none !important;
+}
+
+/* P0-1修复：字体栏头部 - 右上角关闭按钮 */
+.tb-style-header {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 10;
+    /* 确保关闭按钮不遮挡内容 */
+    pointer-events: auto;
+}
+
+.tb-style-close-btn {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    padding: 0 !important;
+    flex-shrink: 0;
+}
+
+.tb-style-close-btn .tb-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.tb-style-close-btn .tb-icon line {
+    stroke: rgba(255,255,255,0.85);
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.tb-style-close-btn:hover .tb-icon line {
+    stroke: rgba(255,255,255,1);
+}
+
+/* P0-1修复：字号档位按钮组样式 */
+.tb-font-size-group {
+    display: flex;
+    gap: 6px;
+}
+
+.tb-font-size-btn {
+    min-width: 32px;
+    height: 32px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.tb-font-size-btn.is-active {
+    background-color: rgba(255,255,255,0.2) !important;
+    border-color: rgba(255,255,255,0.9) !important;
+    color: #fff !important;
+}
+
+/* 增强确认对话框效果 */
+.tb-confirm-dialog {
+    background: linear-gradient(145deg, #2a2a2a, #242424);
+    border: 2px dashed rgba(255,255,255,0.3);
+    box-shadow: 
+        inset 0 4px 8px rgba(0,0,0,0.3),
+        0 12px 32px rgba(0,0,0,0.5);
+}
+
+/* 增强引导界面效果 */
+.tb-guide-content {
+    background: linear-gradient(145deg, #2a2a2a, #242424);
+    border: 2px dashed rgba(255,255,255,0.3);
+    box-shadow: 
+        inset 0 4px 8px rgba(0,0,0,0.3),
+        0 12px 32px rgba(0,0,0,0.5);
+}
+
+/* 增强响应式效果 */
+@media (max-width: 768px) {
+    .tb-editor {
+        width: 96vw;
+        max-height: 90vh;
+    }
+    
+    .tb-action-bar {
+        padding: 12px;
+        gap: 8px;
+    }
+    
+    .tb-btn {
+        padding: 10px;
+        font-size: 14px;
+    }
+}
+
+/* 增强暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #0f0f0f;
+        --panel: #1a1a1a;
+        --card: #222222;
+        --border: rgba(255,255,255,0.15);
+        --text: #f8f8f8;
+        --muted: #b0b0b0;
+    }
+}
+
+/* 增强动画性能 */
+.tb-btn,
+.tb-color-swatch,
+.tb-record,
+.tb-thumb {
+    will-change: transform;
+}
+
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
