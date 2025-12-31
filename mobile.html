@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Today Board - 黑板记录</title>
+    <link rel="manifest" href="/today-board/manifest.webmanifest">
+    <meta name="theme-color" content="#1B1B1B">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Today Board">
+    <link rel="apple-touch-icon" href="/today-board/assets/pwa-192.png">
+    <link rel="stylesheet" href="./styles-v2.css?v=20251230" />
+    <link rel="stylesheet" href="./styles-enhanced.css?v=20251230" />
+</head>
+<body>
+    <!-- 欢迎引导层（首次访问弹出） -->
+    <section id="guideOverlay" class="tb-guide-overlay" aria-hidden="true">
+        <div class="tb-guide-content">
+            <h2 class="tb-guide-title">欢迎来到 Today Board</h2>
+            <p class="tb-guide-text">
+                把每天的灵感、待办、心情写进黑板。<br />
+                支持文字、图片，一键导出分享。
+            </p>
+            <button id="guideConfirmBtn" class="tb-btn tb-primary">我知道了</button>
+        </div>
+    </section>
+    
+    <!-- 清空确认弹窗（覆盖层） -->
+    <section id="confirmClearOverlay" class="tb-confirm-overlay visually-hidden" aria-hidden="true">
+      <div class="tb-confirm-dialog" role="dialog" aria-labelledby="confirmClearTitle">
+        <h3 id="confirmClearTitle" class="tb-confirm-title">确定清空黑板？</h3>
+        <div class="tb-confirm-actions">
+          <button id="confirmClearConfirmBtn" class="tb-btn tb-btn-chalk-white">确定</button>
+          <button id="confirmClearCancelBtn" class="tb-btn tb-btn-chalk-white">取消</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 恢复数据确认弹窗（覆盖层） -->
+    <section id="confirmRestoreOverlay" class="tb-confirm-overlay visually-hidden" aria-hidden="true">
+      <div class="tb-confirm-dialog" role="dialog" aria-labelledby="confirmRestoreTitle">
+        <h3 id="confirmRestoreTitle" class="tb-confirm-title">确定恢复数据？</h3>
+        <p class="tb-confirm-text" style="color: rgba(255,255,255,0.8); font-size: 14px; margin: 12px 0; text-align: center;">此操作将覆盖当前本地数据，建议先备份</p>
+        <div class="tb-confirm-actions">
+          <button id="confirmRestoreConfirmBtn" class="tb-btn tb-btn-chalk-white">确定</button>
+          <button id="confirmRestoreCancelBtn" class="tb-btn tb-btn-chalk-white">取消</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 头部 -->
+    <header class="tb-header">
+        <h1 class="tb-title">Today Board</h1>
+        <div class="tb-date" id="todayDate">0000-00-00</div>
+        <button id="moreBtn" class="tb-more-btn" aria-label="更多" data-tooltip="更多">
+            <svg class="tb-more-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+                <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+            </svg>
+        </button>
+    </header>
+    
+    <!-- 更多说明面板 -->
+    <section id="moreOverlay" class="tb-more-overlay visually-hidden" aria-hidden="true">
+        <div class="tb-more-dialog" role="dialog" aria-labelledby="moreDialogTitle">
+            <div class="tb-more-header">
+                <h3 id="moreDialogTitle" class="tb-more-title">Today Board</h3>
+                <button id="moreCloseBtn" class="tb-more-close-btn" aria-label="关闭">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="tb-more-content">
+                <div class="tb-more-build" id="moreBuildDate">Build 2025.12.22</div>
+                <div class="tb-more-info">
+                    <p>数据仅保存在本地设备</p>
+                    <p>导出图片将保存到系统相册/Downloads</p>
+                </div>
+                <button id="moreBackupBtn" class="tb-more-feedback-btn" style="margin-bottom: 12px;">备份数据（导出 JSON）</button>
+                <button id="moreRestoreBtn" class="tb-more-feedback-btn" style="margin-bottom: 12px;">恢复数据（导入 JSON）</button>
+                <button id="moreFeedbackBtn" class="tb-more-feedback-btn">问题反馈</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 主内容区 -->
+    <main class="tb-main">
+        <!-- 记录列表 -->
+        <section id="recordsList" class="tb-records"></section>
+        <div id="recordsEmpty" class="tb-empty">今天还没有内容，写下第一条吧。</div>
+
+        <!-- 卡片导出容器（截图用，平时隐藏） -->
+        <section id="cardView" class="tb-card-view visually-hidden" aria-hidden="true">
+            <div class="tb-card-header">
+                <div class="tb-card-title">Today Board</div>
+                <div class="tb-card-date" id="cardDate">0000-00-00</div>
+            </div>
+            <div class="tb-card-content" id="cardText"></div>
+            <div class="tb-card-images" id="cardImages"></div>
+            <div class="tb-card-footer">
+                <span id="cardTime">生成时间：00:00</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- 一级页面不再提供输入框与语音/图片入口，仅保留核心按钮 -->
+
+    <!-- 底部固定操作区（第二行） -->
+    <!-- 一级界面底部固定操作区 -->
+    <!-- 一级页面底部固定操作区（只调整圆形导出按钮的箭头几何） -->
+    <div class="tb-actionsbar">
+        <button id="clearBtn" class="tb-btn tb-btn-chalk-white tb-btn-round" data-tooltip="清空">
+          <svg class="tb-icon tb-icon-trash" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <line x1="5" y1="6" x2="19" y2="6" stroke-linecap="round" />
+            <rect x="6" y="8" width="12" height="12" rx="2" ry="2" />
+            <line x1="10" y1="11" x2="10" y2="18" stroke-linecap="round" />
+            <line x1="14" y1="11" x2="14" y2="18" stroke-linecap="round" />
+          </svg>
+        </button>
+        <!-- 中间：圆形“＋”进入二级编辑界面 -->
+        <button id="writeBtn" class="tb-btn tb-btn-chalk-white tb-btn-round" data-tooltip="新建">
+          <svg class="tb-icon tb-icon-plus" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <line x1="12" y1="6" x2="12" y2="18" stroke-linecap="round" />
+            <line x1="6" y1="12" x2="18" y2="12" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button id="generateCardBtn" class="tb-btn tb-btn-chalk-white tb-btn-round" data-tooltip="导出">
+          <svg class="tb-icon tb-icon-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <line x1="5" y1="12" x2="17" y2="12" stroke-linecap="round"/>
+            <polyline points="11,7 19,12 11,17" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+    </div>
+
+    <!-- 隐藏文件输入 -->
+    <input id="imageInput" type="file" accept="image/*" multiple style="display:none" />
+    <input id="jsonInput" type="file" accept=".json,application/json" style="display:none" />
+
+    <!-- 多选模式：上层与下层浮动操作栏 -->
+    <div id="topActionBar" class="tb-action-bar top" aria-hidden="true">
+      <button id="btnCancel" class="tb-btn">取消</button>
+      <span id="selectedCount">已选中 0 条</span>
+      <button id="btnSelectAll" class="tb-btn">全选</button>
+    </div>
+    <div id="bottomActionBar" class="tb-action-bar bottom" aria-hidden="true">
+      <button id="btnDelete" class="tb-btn" data-tooltip="删除选中记录">删除</button>
+      <button id="btnEdit" class="tb-btn" data-tooltip="修改选中记录">修改</button>
+      <button id="btnPin" class="tb-btn" data-tooltip="置顶到顶部" data-state="idle">置顶</button>
+      <button id="btnExport" class="tb-btn" data-tooltip="导出选中记录">导出</button>
+    </div>
+
+    <!-- 二级编辑界面（覆盖层） -->
+    <section id="editorOverlay" class="tb-editor-overlay" aria-hidden="true">
+      <div class="tb-editor">
+        <!-- 顶部：返回 + 状态提示（新增/修改） -->
+        <div class="tb-editor-header">
+          <button id="editorBackBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="返回">←</button>
+          <button id="editorUndoBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="撤销">↻</button>
+          <button id="editorRedoBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="重做">↺</button>
+          <button id="editorSubmitBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="提交">✓</button>
+        </div>
+        <!-- 中部：大输入区（多行） -->
+            <div id="editorText" class="tb-editor-input" contenteditable="true" data-placeholder="在这里输入今天的内容（支持多行、长文）"></div>
+        <!-- 图片预览区（可删可保留） -->
+        <div id="imagePreview" class="tb-editor-preview"></div>
+        <!-- 下方工具栏：添加图片、任务勾选、字体样式 -->
+<div class="tb-editor-toolbar">
+  <button id="editorAddImageBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="添加图片">
+    <svg class="tb-icon tb-icon-image" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke-linecap="round"/>
+      <circle cx="8.5" cy="8.5" r="1.5" stroke-linecap="round"/>
+      <polyline points="21,15 16,10 5,21" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <button id="editorChecklistBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="任务勾选">☑</button>
+  <!-- 字体样式总按钮（A） -->
+  <button id="editorStyleBtn" class="tb-btn tb-btn-round tb-btn-chalk-white tb-style-btn" data-tooltip="字体样式">A</button>
+</div>
+<!-- 浮动下栏：字体样式设置 -->
+<div id="editorStyleBar" class="tb-style-bar visually-hidden" aria-hidden="true">
+  <!-- P0-1修复：字体栏头部 - 右上角关闭按钮 -->
+  <div class="tb-style-header">
+    <button id="editorStyleBarCloseBtn" class="tb-btn tb-btn-round tb-btn-chalk-white tb-style-close-btn" data-tooltip="关闭" aria-label="关闭字体栏">
+      <svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <line x1="18" y1="6" x2="6" y2="18" stroke-linecap="round"/>
+        <line x1="6" y1="6" x2="18" y2="18" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <!-- 字体栏主体内容 -->
+  <div class="tb-style-row">
+    <!-- 字号滑杆（3档） -->
+    <input id="editorFontSize" class="tb-font-slider" type="range" min="1" max="3" step="1" value="2" aria-label="字体大小" />
+    <!-- 文本样式按钮组（B/I/U） -->
+    <div class="tb-style-group" role="group" aria-label="文本样式">
+      <button id="editorBoldBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="加粗">B</button>
+      <button id="editorItalicBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="斜体">I</button>
+      <button id="editorUnderlineBtn" class="tb-btn tb-btn-round tb-btn-chalk-white" data-tooltip="下划线">U</button>
+    </div>
+    <!-- 字体颜色功能 -->
+    <div id="editorColorPalette" class="tb-color-palette" aria-hidden="false">
+      <button class="tb-color-swatch" data-color="#FFFFFF" title="白色"></button>
+      <button class="tb-color-swatch" data-color="#CCCCCC" title="浅灰"></button>
+      <button class="tb-color-swatch" data-color="#F6D55C" title="黄色"></button>
+      <button class="tb-color-swatch" data-color="#65B86A" title="绿色"></button>
+      <button class="tb-color-swatch" data-color="#4DA8DA" title="蓝色"></button>
+      <button class="tb-color-swatch" data-color="#E15B5B" title="红色"></button>
+      <button class="tb-color-swatch" data-color="#1B1B1B" title="黑色"></button>
+    </div>
+  </div>
+</div>
+      </div>
+    </section>
+    
+    <!-- 预览层由 JS 动态插入；将脚本放在文末，确保上/下浮动栏已在 DOM 中 -->
+    <script src="./app.js?v=20251230"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/today-board/sw.js');
+      }
+    </script>
+  </body>
+</html>
