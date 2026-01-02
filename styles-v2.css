@@ -5,33 +5,17 @@
 
 /* 手写体字体定义（webfont） */
 @font-face {
-    font-family: 'TodayBoardHandwriting';
-    font-style: normal;
-    font-weight: 300;
-    font-display: swap;
-    src: url('./fonts/kalam-light.woff2') format('woff2'),
-         url('./fonts/kalam-light.woff') format('woff'),
-         url('./fonts/kalam-light.ttf') format('truetype');
+  font-family: "Kalam";
+  src: url("./fonts/kalam-regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
 }
 
 @font-face {
-    font-family: 'TodayBoardHandwriting';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url('./fonts/kalam-regular.woff2') format('woff2'),
-         url('./fonts/kalam-regular.woff') format('woff'),
-         url('./fonts/kalam-regular.ttf') format('truetype');
-}
-
-@font-face {
-    font-family: 'TodayBoardHandwriting';
-    font-style: normal;
-    font-weight: 700;
-    font-display: swap;
-    src: url('./fonts/kalam-bold.woff2') format('woff2'),
-         url('./fonts/kalam-bold.woff') format('woff'),
-         url('./fonts/kalam-bold.ttf') format('truetype');
+  font-family: "Kalam";
+  src: url("./fonts/kalam-bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
 }
 
 /* 配色变量（粉笔黑板风） */
