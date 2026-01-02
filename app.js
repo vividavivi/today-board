@@ -14,7 +14,7 @@
         TODAY_RECORDS: 'todayRecords',
     };
     const APP_VERSION = 'v0.2';
-    const BUILD_DATE = '2025.12.22'; // P0修复：Build 日期常量
+    const BUILD_DATE = '2025.12.31'; // P0修复：Build 日期常量
     // v1规范：功能开关
     const FEATURE_COLOR = true; // 字体颜色功能（已恢复）
     
