@@ -18,6 +18,19 @@
   font-style: normal;
 }
 
+html, body {
+  font-family: "Kalam",
+               -apple-system,
+               BlinkMacSystemFont,
+               "Segoe UI",
+               Roboto,
+               "Helvetica Neue",
+               Arial,
+               "PingFang SC",
+               "Microsoft YaHei",
+               sans-serif;
+}
+
 /* 配色变量（粉笔黑板风） */
 :root {
     /* 主色调统一 */
