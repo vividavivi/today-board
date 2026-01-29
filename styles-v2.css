@@ -71,18 +71,18 @@ body {
     /* 底色兜底 */
     background-color: #0f1216;
 
-    /* 你的黑板材质图（主层） */
+    /* 黑板材质图（多层叠加） */
     background-image:
-        /* 暗角 + 中央略亮（覆盖层） */
-        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.00) 55%),
+        /* 暗角层：四周更暗 */
         radial-gradient(circle at 50% 50%, rgba(0,0,0,0.00) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.75) 100%),
-        /* 黑板材质（底层） */
-        url("./assets/bg/board.webp");
+        /* 中央略亮层：提升可读性 */
+        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.00) 55%),
+        /* 材质底图 */
+        url("./assets/bg/bg_blackboard_main.webp");
 
-    background-repeat: no-repeat, no-repeat, no-repeat;
-    background-size: cover, cover, cover;
-    background-position: center, center, center;
-    background-attachment: fixed;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: var(--text);
     /* P1修复：统一字体栈，正文使用系统字体，确保中英数字风格一致 */
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
@@ -392,7 +392,10 @@ body {
 }
 
 .tb-record.is-selected {
-    background: rgba(255,255,255,0.08);
+    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     box-shadow: 
         inset 0 2px 4px rgba(255,255,255,0.1),
         inset 0 -1px 2px rgba(0,0,0,0.1);
@@ -609,7 +612,10 @@ body {
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background: rgba(27,27,27,0.95);
+    background-image: url("./assets/bg/bg_blackboard_main.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     backdrop-filter: blur(8px);
     display: none;
     flex-direction: column;
@@ -1121,7 +1127,10 @@ body {
     position: fixed;
     inset: 0;
     z-index: 3000;
-    background: rgba(27,27,27,0.98);
+    background-image: url("./assets/bg/bg_blackboard_main.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     backdrop-filter: blur(10px);
     display: none;
     flex-direction: column;
@@ -1428,7 +1437,10 @@ body {
 /* P0：导出预览必须复用黑板卡片的同一套 DOM 结构 + CSS */
 /* P0：导出内容区宽度 = 黑板内容区宽度（通过JS动态设置） */
 .tb-card-view {
-    background: var(--bg);
+    background-image: url("./assets/bg/bg_blackboard_main.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: var(--text);
     padding: 24px;
     /* width 和 max-width 由 JS 动态设置为黑板内容区宽度 */

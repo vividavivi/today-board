@@ -188,9 +188,12 @@ body::before {
         0 0 15px rgba(149,213,178,0.4);
 }
 
-/* 增强记录卡片粉笔效果 */
+/* 增强记录卡片粉笔效果 - 便签栏使用浅色黑板材质 */
 .tb-record {
-    background: linear-gradient(145deg, #282828, #222222);
+    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     border: 1px dashed rgba(255,255,255,0.15);
     box-shadow: 
         inset 0 2px 4px rgba(0,0,0,0.2),
@@ -328,7 +331,10 @@ body::before {
         inset 0 2px 4px rgba(0,0,0,0.2),
         0 0 0 3px rgba(255,255,255,0.2),
         0 8px 16px rgba(0,0,0,0.3);
-    background: linear-gradient(145deg, #303030, #282828);
+    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 /* 增强导出按钮效果 */
