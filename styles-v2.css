@@ -53,6 +53,15 @@ html, body {
     
     /* 噪点纹理（使用 SVG 生成） */
     --noise-texture: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+
+    /* 导出背景（用于 html2canvas 捕获） */
+    --board-bg-image:
+        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.00) 55%),
+        radial-gradient(circle at 50% 50%, rgba(0,0,0,0.00) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.75) 100%),
+        url("./assets/bg/board.webp");
+    --board-bg-repeat: no-repeat, no-repeat, no-repeat;
+    --board-bg-size: cover, cover, cover;
+    --board-bg-position: center, center, center;
     
     /* P0：统一三处的文字基准（必须同源） */
     --tb-font-size: 16px;
@@ -72,16 +81,10 @@ body {
     background-color: #0f1216;
 
     /* 你的黑板材质图（主层） */
-    background-image:
-        /* 暗角 + 中央略亮（覆盖层） */
-        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.00) 55%),
-        radial-gradient(circle at 50% 50%, rgba(0,0,0,0.00) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.75) 100%),
-        /* 黑板材质（底层） */
-        url("./assets/bg/board.webp");
-
-    background-repeat: no-repeat, no-repeat, no-repeat;
-    background-size: cover, cover, cover;
-    background-position: center, center, center;
+    background-image: var(--board-bg-image);
+    background-repeat: var(--board-bg-repeat);
+    background-size: var(--board-bg-size);
+    background-position: var(--board-bg-position);
     background-attachment: fixed;
     color: var(--text);
     /* P1修复：统一字体栈，正文使用系统字体，确保中英数字风格一致 */
@@ -1442,6 +1445,15 @@ body {
     /* 禁止出现窄列布局，允许高度无限增长（长图） */
 }
 
+.tb-card-view.export-with-bg {
+    background-color: #0f1216;
+    background-image: var(--board-bg-image);
+    background-repeat: var(--board-bg-repeat);
+    background-size: var(--board-bg-size);
+    background-position: var(--board-bg-position);
+    background-attachment: scroll;
+}
+
 /* P0：导出态禁用所有遮罩层、滤镜、opacity（防止导出图片变暗） */
 .is-exporting,
 .is-exporting * {
@@ -1470,15 +1482,24 @@ body.is-exporting {
 }
 
 /* 导出态禁用噪点纹理 */
-.is-exporting .tb-card-view,
-.is-exporting .tb-card-view * {
+.is-exporting .tb-card-view:not(.export-with-bg),
+.is-exporting .tb-card-view:not(.export-with-bg) * {
     background-image: none !important;
 }
 
 /* 导出态确保导出容器背景纯净 */
-.is-exporting .tb-card-view {
+.is-exporting .tb-card-view:not(.export-with-bg) {
     background: #1B1B1B !important;
     background-image: none !important;
+}
+
+.is-exporting .tb-card-view.export-with-bg {
+    background-color: #0f1216 !important;
+    background-image: var(--board-bg-image) !important;
+    background-repeat: var(--board-bg-repeat) !important;
+    background-size: var(--board-bg-size) !important;
+    background-position: var(--board-bg-position) !important;
+    background-attachment: scroll !important;
 }
 
 /* 导出态禁用所有透明度叠加（防止变暗） */
@@ -1829,4 +1850,3 @@ body.is-exporting {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
-
