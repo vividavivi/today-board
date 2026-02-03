@@ -406,9 +406,20 @@ body::before {
 }
 
 /* P0：导出态禁用增强效果，确保亮度一致 */
-.is-exporting .tb-card-view {
+.is-exporting .tb-card-view:not(.export-with-bg) {
     background: #1B1B1B !important;
     background-image: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+.is-exporting .tb-card-view.export-with-bg {
+    background-color: #0f1216 !important;
+    background-image: var(--board-bg-image) !important;
+    background-repeat: var(--board-bg-repeat) !important;
+    background-size: var(--board-bg-size) !important;
+    background-position: var(--board-bg-position) !important;
+    background-attachment: scroll !important;
     box-shadow: none !important;
     filter: none !important;
 }

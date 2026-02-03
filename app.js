@@ -706,11 +706,13 @@
             })(cardText);
             
             await ensureHtml2Canvas();
+            exportContainer.classList.add('export-with-bg');
             exportContainer.classList.remove('visually-hidden');
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
             document.body.classList.add('is-exporting');
+            await waitForBackgroundImages(exportContainer);
             await waitForImages(exportContainer);
             
             // P0：使用scale提升分辨率，不缩小DOM
@@ -792,6 +794,7 @@
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('export-with-bg');
             document.body.classList.remove('is-exporting');
             // 恢复默认样式
             exportContainer.style.width = '';
@@ -801,6 +804,7 @@
             alert('导出失败，请稍后重试');
             // 确保清理状态
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('export-with-bg');
             document.body.classList.remove('is-exporting');
         }
     }
@@ -4971,6 +4975,38 @@ function openEditor(mode, idx) {
             });
         }));
     }
+
+    function extractBackgroundUrls(backgroundImage) {
+        if (!backgroundImage || backgroundImage === 'none') return [];
+        const urls = [];
+        const regex = /url\(["']?([^"')]+)["']?\)/g;
+        let match = regex.exec(backgroundImage);
+        while (match) {
+            const rawUrl = match[1];
+            if (rawUrl && !rawUrl.startsWith('data:')) {
+                urls.push(rawUrl);
+            }
+            match = regex.exec(backgroundImage);
+        }
+        return urls;
+    }
+
+    async function waitForBackgroundImages(element) {
+        if (!element) return;
+        const style = window.getComputedStyle(element);
+        const urls = extractBackgroundUrls(style.backgroundImage);
+        if (urls.length === 0) return;
+        await Promise.all(urls.map(src => new Promise(resolve => {
+            const img = new Image();
+            img.onload = resolve;
+            img.onerror = resolve;
+            try {
+                img.src = new URL(src, window.location.href).href;
+            } catch {
+                img.src = src;
+            }
+        })));
+    }
     // P0修复：裁剪图片的空白区域
     async function cropImageWhitespace(canvas, padding = 20) {
         try {
@@ -5204,6 +5240,7 @@ function openEditor(mode, idx) {
             
             // P0修复：等待图片加载完成
             try {
+                await waitForBackgroundImages(exportContainer);
                 await waitForImages(exportContainer);
             } catch (e) {
                 console.warn('等待图片加载时出错:', e);
@@ -5300,6 +5337,7 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('export-with-bg');
             document.body.classList.remove('is-exporting');
         } catch (err) {
             // P0修复：更好的错误提示
@@ -5312,6 +5350,7 @@ function openEditor(mode, idx) {
             const exportContainer = els.cardView;
             if (exportContainer) {
                 exportContainer.classList.remove('is-exporting');
+                exportContainer.classList.remove('export-with-bg');
                 exportContainer.classList.add('visually-hidden');
             }
             document.body.classList.remove('is-exporting');
@@ -5414,11 +5453,13 @@ function openEditor(mode, idx) {
             })(cardText);
             
             await ensureHtml2Canvas();
+            exportContainer.classList.add('export-with-bg');
             exportContainer.classList.remove('visually-hidden');
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
             document.body.classList.add('is-exporting');
+            await waitForBackgroundImages(exportContainer);
             await waitForImages(exportContainer);
             
             // P0：使用scale提升分辨率，不缩小DOM
@@ -5500,6 +5541,7 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('export-with-bg');
             document.body.classList.remove('is-exporting');
             // 恢复默认样式
             exportContainer.style.width = '';
@@ -5509,6 +5551,7 @@ function openEditor(mode, idx) {
             console.error(err);
             // 确保清理状态
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('export-with-bg');
             document.body.classList.remove('is-exporting');
         }
     }
