@@ -18,6 +18,8 @@
     // 导出图片：固定宽度 & 底部留白
     const EXPORT_WIDTH = 390; // 导出 PNG 固定宽度（px）
     const EXPORT_BOTTOM_PADDING = 20; // 生成时间下方额外留白（px）
+    // 导出裁剪：记录 clone 中的 footer 位置与整体高度，供 canvas 裁剪使用
+    let lastExportCloneMetrics = null;
     // v1规范：功能开关
     const FEATURE_COLOR = true; // 字体颜色功能（已恢复）
     
@@ -731,6 +733,8 @@
             // P0：限制高度为“生成时间”行下方固定留白，避免导出大段空白
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
+            // 每次导出前重置 clone 度量信息
+            lastExportCloneMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
                 useCORS: true, 
@@ -784,14 +788,11 @@
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦
+                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦（高度由内容与 scrollHeight 决定）
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
                         clonedContainer.style.boxSizing = 'border-box';
-                        var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
-                        clonedContainer.style.height = contentH + 'px';
-                        clonedContainer.style.minHeight = contentH + 'px';
                         
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
                         var maxWidthPx = Math.floor(exportWidth * 0.7);
@@ -829,11 +830,36 @@
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
+
+                        // 记录 clone 中 footer 位置与整体高度，供 canvas 裁剪使用
+                        try {
+                            var footerEl = clonedContainer.querySelector('#exportGeneratedAt') || clonedContainer.querySelector('#cardTime');
+                            if (footerEl) {
+                                // 确保有稳定选择器，仅作用于 clone
+                                footerEl.id = 'exportGeneratedAt';
+                                var footerBottom = footerEl.offsetTop + footerEl.offsetHeight;
+                                var rootScrollHeight = clonedContainer.scrollHeight || clonedContainer.offsetHeight || 0;
+                                lastExportCloneMetrics = {
+                                    footerBottom: footerBottom,
+                                    rootScrollHeight: rootScrollHeight
+                                };
+                                console.log('[TB-Export-Metrics:onclone]', {
+                                    footerBottom,
+                                    rootScrollHeight
+                                });
+                            } else {
+                                console.warn('[TB-Export-Metrics:onclone] 未找到生成时间元素 (#exportGeneratedAt / #cardTime)');
+                                lastExportCloneMetrics = null;
+                            }
+                        } catch (e) {
+                            console.warn('[TB-Export-Metrics:onclone] 计算 footer 定位失败', e);
+                            lastExportCloneMetrics = null;
+                        }
                     }
                 }
             });
             // 仅按高度裁剪到“生成时间+固定留白”，不再按颜色/亮度二次裁剪，宽度保持不变
-            const croppedCanvas = canvas;
+            const croppedCanvas = cropCanvasByFooter(canvas);
 
             let dataUrl;
             try {
@@ -5072,8 +5098,8 @@ function openEditor(mode, idx) {
             });
     }
     /** 
-     * 根据“生成时间”行（或 footer / 最后一条记录）计算导出区域的内容高度，
-     * 统一裁剪到生成时间下方 EXPORT_BOTTOM_PADDING 像素，避免底部大段空白。
+     * 根据“生成时间”行（或 footer / 最后一条记录）计算导出区域的大致内容高度，
+     * 用于限制 html2canvas 的渲染高度，最终精确裁剪在 canvas 层完成。
      */
     function getExportContentHeight(container) {
         if (!container || !container.getBoundingClientRect) return null;
@@ -5114,7 +5140,7 @@ function openEditor(mode, idx) {
                 }
             }
         }
-        // 统一在“生成时间”下方留出固定像素的空白
+        // 在 DOM 层留出一定冗余高度，避免内容被截断；精确裁剪在 canvas 层完成
         var contentH = Math.ceil(contentBottom - containerTop) + EXPORT_BOTTOM_PADDING;
         var scrollH = container.scrollHeight || container.offsetHeight;
         var out = Math.min(contentH, scrollH);
@@ -5123,6 +5149,71 @@ function openEditor(mode, idx) {
             localStorage.setItem('tb_content_height_debug', JSON.stringify({ contentH, scrollH, out }));
         } catch (e) {}
         return out;
+    }
+    /**
+     * 在 canvas 层，基于 clone 中记录的 footer 位置，按“生成时间 + EXPORT_BOTTOM_PADDING”精确裁剪高度。
+     * 只裁剪纵向高度，宽度保持不变；找不到 footer 时直接返回原始 canvas。
+     */
+    function cropCanvasByFooter(canvas) {
+        try {
+            if (!canvas) {
+                console.warn('[TB-Export-Crop] canvas 不存在，跳过裁剪');
+                return canvas;
+            }
+            const m = lastExportCloneMetrics;
+            if (!m || !m.rootScrollHeight || !m.footerBottom) {
+                console.warn('[TB-Export-Crop] footer 定位信息缺失，使用完整画布高度', { metrics: m });
+                return canvas; // 兜底：不裁剪
+            }
+            const footerBottom = m.footerBottom;
+            const targetCssHeight = footerBottom + EXPORT_BOTTOM_PADDING;
+            const rootScrollHeight = Math.max(m.rootScrollHeight, 1);
+            const canvasHeight = canvas.height || 1;
+            const scaleY = canvasHeight / rootScrollHeight;
+            const targetCanvasHeight = Math.min(
+                canvasHeight,
+                Math.ceil(targetCssHeight * scaleY)
+            );
+            // 调试日志（仅 console）
+            console.log('[TB-Export-Crop]', {
+                footerBottom,
+                targetCssHeight,
+                rootScrollHeight,
+                canvasHeight,
+                scaleY,
+                targetCanvasHeight
+            });
+            if (targetCanvasHeight <= 0 || targetCanvasHeight >= canvasHeight) {
+                console.warn('[TB-Export-Crop] 目标高度超出范围，使用完整画布高度', {
+                    targetCanvasHeight,
+                    canvasHeight
+                });
+                return canvas;
+            }
+            const newCanvas = document.createElement('canvas');
+            newCanvas.width = canvas.width;
+            newCanvas.height = targetCanvasHeight;
+            const ctx = newCanvas.getContext('2d');
+            if (!ctx) {
+                console.warn('[TB-Export-Crop] 无法获取 2D context，使用完整画布高度');
+                return canvas;
+            }
+            ctx.drawImage(
+                canvas,
+                0,
+                0,
+                canvas.width,
+                targetCanvasHeight,
+                0,
+                0,
+                canvas.width,
+                targetCanvasHeight
+            );
+            return newCanvas;
+        } catch (err) {
+            console.warn('[TB-Export-Crop] 裁剪异常，使用完整画布高度', err);
+            return canvas;
+        }
     }
     // P0修复：裁剪图片的空白区域。options: { paddingBottom, maxHeightCanvas } 可选，maxHeightCanvas 限制裁剪后高度，强制裁掉底部多余空白
     async function cropImageWhitespace(canvas, padding = 20, options) {
@@ -5706,6 +5797,8 @@ function openEditor(mode, idx) {
             // P0：限制高度为“生成时间”行下方固定留白，避免导出大段空白
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
+            // 每次导出前重置 clone 度量信息
+            lastExportCloneMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
                 useCORS: true, 
@@ -5804,11 +5897,36 @@ function openEditor(mode, idx) {
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
+
+                        // 记录 clone 中 footer 位置与整体高度，供 canvas 裁剪使用
+                        try {
+                            var footerEl = clonedContainer.querySelector('#exportGeneratedAt') || clonedContainer.querySelector('#cardTime');
+                            if (footerEl) {
+                                // 确保有稳定选择器，仅作用于 clone
+                                footerEl.id = 'exportGeneratedAt';
+                                var footerBottom = footerEl.offsetTop + footerEl.offsetHeight;
+                                var rootScrollHeight = clonedContainer.scrollHeight || clonedContainer.offsetHeight || 0;
+                                lastExportCloneMetrics = {
+                                    footerBottom: footerBottom,
+                                    rootScrollHeight: rootScrollHeight
+                                };
+                                console.log('[TB-Export-Metrics:onclone]', {
+                                    footerBottom,
+                                    rootScrollHeight
+                                });
+                            } else {
+                                console.warn('[TB-Export-Metrics:onclone] 未找到生成时间元素 (#exportGeneratedAt / #cardTime)');
+                                lastExportCloneMetrics = null;
+                            }
+                        } catch (e) {
+                            console.warn('[TB-Export-Metrics:onclone] 计算 footer 定位失败', e);
+                            lastExportCloneMetrics = null;
+                        }
                     }
                 }
             });
             // 仅按高度裁剪到“生成时间+固定留白”，不再按颜色/亮度二次裁剪，宽度保持不变
-            const croppedCanvas = canvas;
+            const croppedCanvas = cropCanvasByFooter(canvas);
             
             let dataUrl;
             try {
