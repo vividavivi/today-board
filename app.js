@@ -15,6 +15,9 @@
     };
     const APP_VERSION = 'v0.2';
     const BUILD_DATE = '2025.12.31'; // P0修复：Build 日期常量
+    // 导出图片：固定宽度 & 底部留白
+    const EXPORT_WIDTH = 390; // 导出 PNG 固定宽度（px）
+    const EXPORT_BOTTOM_PADDING = 20; // 生成时间下方额外留白（px）
     // v1规范：功能开关
     const FEATURE_COLOR = true; // 字体颜色功能（已恢复）
     
@@ -637,7 +640,7 @@
             cardDate.textContent = dateStr;
             cardTime.textContent = `生成时间：${timeStr}`;
             
-            // P0：导出内容区宽度 = 黑板内容区宽度（强制同源渲染）
+            // P0：导出内容区宽度 = 黑板内容区宽度（页面展示用），导出 PNG 宽度固定为 EXPORT_WIDTH
             const boardWidth = getBoardContentWidth();
             exportContainer.style.width = `${boardWidth}px`;
             exportContainer.style.maxWidth = `${boardWidth}px`;
@@ -725,16 +728,17 @@
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：限制高度为内容高度，避免导出大段空白
+            // P0：限制高度为“生成时间”行下方固定留白，避免导出大段空白
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
+            const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
                 useCORS: true, 
                 allowTaint: true,
                 scale: 2, // 提升分辨率，不缩小DOM
                 logging: false,
-                width: boardWidth, // 强制宽度
-                windowWidth: boardWidth,
+                width: exportWidth, // 导出 PNG 宽度锁定
+                windowWidth: exportWidth,
                 height: _contentH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
@@ -780,14 +784,17 @@
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        clonedContainer.style.width = boardWidth + 'px';
-                        clonedContainer.style.maxWidth = boardWidth + 'px';
+                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦
+                        clonedContainer.style.width = exportWidth + 'px';
+                        clonedContainer.style.maxWidth = exportWidth + 'px';
+                        clonedContainer.style.minWidth = exportWidth + 'px';
+                        clonedContainer.style.boxSizing = 'border-box';
                         var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
                         clonedContainer.style.height = contentH + 'px';
                         clonedContainer.style.minHeight = contentH + 'px';
                         
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
-                        var maxWidthPx = Math.floor(boardWidth * 0.7);
+                        var maxWidthPx = Math.floor(exportWidth * 0.7);
                         allImgs.forEach(function (img) {
                             img.style.maxWidth = maxWidthPx + 'px';
                             img.style.width = 'auto';
@@ -825,15 +832,9 @@
                     }
                 }
             });
-            // P0修复：按内容高度裁剪；maxHeightCanvas 不超过 canvas 高度
-            var _scale = boardWidth > 0 ? canvas.width / boardWidth : 2;
-            var _maxH = Math.round(_contentH * _scale) + 20;
-            var _maxHeightCanvas = Math.min(canvas.height, _maxH);
-            const croppedCanvas = await cropImageWhitespace(canvas, 20, {
-                paddingBottom: 20,
-                maxHeightCanvas: _maxHeightCanvas
-            });
-            
+            // 仅按高度裁剪到“生成时间+固定留白”，不再按颜色/亮度二次裁剪，宽度保持不变
+            const croppedCanvas = canvas;
+
             let dataUrl;
             try {
                 dataUrl = croppedCanvas.toDataURL('image/png');
@@ -5070,32 +5071,51 @@ function openEditor(mode, idx) {
                 });
             });
     }
-    /** 根据最后内容元素（footer 或最后一条记录）计算导出区域的内容高度，避免底部大段空白 */
+    /** 
+     * 根据“生成时间”行（或 footer / 最后一条记录）计算导出区域的内容高度，
+     * 统一裁剪到生成时间下方 EXPORT_BOTTOM_PADDING 像素，避免底部大段空白。
+     */
     function getExportContentHeight(container) {
         if (!container || !container.getBoundingClientRect) return null;
         const rect = container.getBoundingClientRect();
         const containerTop = rect.top;
         let contentBottom = rect.top;
+
+        // 优先：根据“生成时间”这一行来裁剪高度
+        const generatedAt = container.querySelector('#cardTime, .export-generated-at');
+        if (generatedAt && generatedAt.getBoundingClientRect) {
+            const gr = generatedAt.getBoundingClientRect();
+            if (gr.bottom > contentBottom) contentBottom = gr.bottom;
+        }
+
+        // 兜底：footer 或最后一条记录
         const footer = container.querySelector('.tb-card-footer');
-        if (footer) {
+        if (footer && footer.getBoundingClientRect) {
             const fr = footer.getBoundingClientRect();
             if (fr.bottom > contentBottom) contentBottom = fr.bottom;
         }
         const records = container.querySelectorAll('.tb-record, .tb-export-record');
         if (records.length) {
             const lastR = records[records.length - 1];
-            const rr = lastR.getBoundingClientRect();
-            if (rr.bottom > contentBottom) contentBottom = rr.bottom;
+            if (lastR && lastR.getBoundingClientRect) {
+                const rr = lastR.getBoundingClientRect();
+                if (rr.bottom > contentBottom) contentBottom = rr.bottom;
+            }
         }
         if (contentBottom <= containerTop) {
             var dateEl = container.querySelector('.tb-card-date');
-            if (dateEl) contentBottom = dateEl.getBoundingClientRect().bottom;
+            if (dateEl && dateEl.getBoundingClientRect) {
+                contentBottom = dateEl.getBoundingClientRect().bottom;
+            }
             else {
                 var titleEl = container.querySelector('.tb-card-title');
-                if (titleEl) contentBottom = titleEl.getBoundingClientRect().bottom;
+                if (titleEl && titleEl.getBoundingClientRect) {
+                    contentBottom = titleEl.getBoundingClientRect().bottom;
+                }
             }
         }
-        var contentH = Math.ceil(contentBottom - containerTop) + 20; // 底部留一点边距
+        // 统一在“生成时间”下方留出固定像素的空白
+        var contentH = Math.ceil(contentBottom - containerTop) + EXPORT_BOTTOM_PADDING;
         var scrollH = container.scrollHeight || container.offsetHeight;
         var out = Math.min(contentH, scrollH);
         try {
@@ -5394,14 +5414,15 @@ function openEditor(mode, idx) {
             })();
             // #endregion
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
+            const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
                 useCORS: true, 
                 allowTaint: true, // 允许含背景图等时完成绘制，避免导出直接失败
                 scale: window.devicePixelRatio || 2, // P0修复：使用设备像素比
                 logging: false, // 关闭日志以减少控制台输出
-                width: boardWidth, // 强制宽度
-                windowWidth: boardWidth,
+                width: exportWidth, // 导出 PNG 宽度锁定
+                windowWidth: exportWidth,
                 height: _contentH, // P0修复：按内容高度截断，避免底部大段空白
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
@@ -5447,14 +5468,17 @@ function openEditor(mode, idx) {
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        clonedContainer.style.width = boardWidth + 'px';
-                        clonedContainer.style.maxWidth = boardWidth + 'px';
+                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦
+                        clonedContainer.style.width = exportWidth + 'px';
+                        clonedContainer.style.maxWidth = exportWidth + 'px';
+                        clonedContainer.style.minWidth = exportWidth + 'px';
+                        clonedContainer.style.boxSizing = 'border-box';
                         var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
                         clonedContainer.style.height = contentH + 'px';
                         clonedContainer.style.minHeight = contentH + 'px';
                         
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
-                        var maxWidthPx = Math.floor(boardWidth * 0.7);
+                        var maxWidthPx = Math.floor(exportWidth * 0.7);
                         allImgs.forEach(img => {
                             // 与主页一致：图片最大宽度为容器 70%
                             img.style.maxWidth = `${maxWidthPx}px`;
@@ -5508,15 +5532,8 @@ function openEditor(mode, idx) {
                 throw new Error('生成的画布无效');
             }
             
-            // P0修复：按内容高度裁剪；maxHeightCanvas 不超过 canvas 高度，否则裁剪不生效
-            var scale = boardWidth > 0 ? canvas.width / boardWidth : 2;
-            var paddingBottom = 20;
-            var maxH = Math.round(_contentH * scale) + paddingBottom;
-            var maxHeightCanvas = Math.min(canvas.height, maxH);
-            var croppedCanvas = await cropImageWhitespace(canvas, 20, {
-                paddingBottom: paddingBottom,
-                maxHeightCanvas: maxHeightCanvas
-            });
+            // 仅按高度裁剪到“生成时间+固定留白”，不再按颜色/亮度二次裁剪，宽度保持不变
+            var croppedCanvas = canvas;
             
             // P0修复：尝试导出图片数据，如果因跨域/污染失败则提示
             let dataUrl;
@@ -5686,16 +5703,17 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：限制高度为内容高度，避免导出大段空白
+            // P0：限制高度为“生成时间”行下方固定留白，避免导出大段空白
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
+            const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
                 useCORS: true, 
                 allowTaint: true,
                 scale: 2, // 提升分辨率，不缩小DOM
                 logging: false,
-                width: boardWidth, // 强制宽度
-                windowWidth: boardWidth,
+                width: exportWidth, // 导出 PNG 宽度锁定
+                windowWidth: exportWidth,
                 height: _contentH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
@@ -5741,8 +5759,11 @@ function openEditor(mode, idx) {
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        clonedContainer.style.width = boardWidth + 'px';
-                        clonedContainer.style.maxWidth = boardWidth + 'px';
+                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦
+                        clonedContainer.style.width = exportWidth + 'px';
+                        clonedContainer.style.maxWidth = exportWidth + 'px';
+                        clonedContainer.style.minWidth = exportWidth + 'px';
+                        clonedContainer.style.boxSizing = 'border-box';
                         var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
                         clonedContainer.style.height = contentH + 'px';
                         clonedContainer.style.minHeight = contentH + 'px';
@@ -5786,14 +5807,8 @@ function openEditor(mode, idx) {
                     }
                 }
             });
-            // P0修复：按内容高度裁剪；maxHeightCanvas 不超过 canvas 高度
-            var _scale = boardWidth > 0 ? canvas.width / boardWidth : 2;
-            var _maxH = Math.round(_contentH * _scale) + 20;
-            var _maxHeightCanvas = Math.min(canvas.height, _maxH);
-            const croppedCanvas = await cropImageWhitespace(canvas, 20, {
-                paddingBottom: 20,
-                maxHeightCanvas: _maxHeightCanvas
-            });
+            // 仅按高度裁剪到“生成时间+固定留白”，不再按颜色/亮度二次裁剪，宽度保持不变
+            const croppedCanvas = canvas;
             
             let dataUrl;
             try {
