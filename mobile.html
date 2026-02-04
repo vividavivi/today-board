@@ -219,8 +219,8 @@
     <!-- 预览层由 JS 动态插入；将脚本放在文末，确保上/下浮动栏已在 DOM 中 -->
     <script src="./app.js?v=20251230"></script>
     <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/today-board/sw.js');
+      if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
+        navigator.serviceWorker.register('/today-board/sw.js').catch(function () {});
       }
     </script>
   </body>

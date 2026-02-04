@@ -414,10 +414,12 @@ body::before {
     zoom: 1 !important;
 }
 
-/* P0：导出态禁用增强效果，确保亮度一致 */
+/* P0：导出态使用黑板材质图作为导出图片背景 */
 .is-exporting .tb-card-view {
-    background: #1B1B1B !important;
-    background-image: none !important;
+    background-image: url("./assets/bg/bg_blackboard_main.webp") !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
     box-shadow: none !important;
     filter: none !important;
 }

@@ -1481,16 +1481,17 @@ body.is-exporting {
     opacity: 0 !important;
 }
 
-/* 导出态禁用噪点纹理 */
-.is-exporting .tb-card-view,
+/* 导出态：子元素禁用背景图，避免叠层；导出容器保留黑板材质 */
 .is-exporting .tb-card-view * {
     background-image: none !important;
 }
 
-/* 导出态确保导出容器背景纯净 */
+/* 导出态：导出图片背景使用黑板材质图 */
 .is-exporting .tb-card-view {
-    background: #1B1B1B !important;
-    background-image: none !important;
+    background-image: url("./assets/bg/bg_blackboard_main.webp") !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
 }
 
 /* 导出态禁用所有透明度叠加（防止变暗） */
