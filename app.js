@@ -730,8 +730,8 @@
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：将 html2canvas 渲染高度设置为容器完整 scrollHeight；精确裁剪在 canvas 层完成
-            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
+            // P0：将 html2canvas 渲染高度设置为容器内容高度（与 generateTodayCard 一致）
+            var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
@@ -5816,8 +5816,8 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：将 html2canvas 渲染高度设置为容器完整 scrollHeight；精确裁剪在 canvas 层完成
-            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
+            // P0：将 html2canvas 渲染高度设置为容器内容高度（与 generateTodayCard 一致）
+            var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             // 用原始 DOM 的 offset 计算「生成时间」底部，供 canvas 裁剪
             lastExportCloneMetrics = null;
