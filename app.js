@@ -730,8 +730,10 @@
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：将 html2canvas 渲染高度设置为容器内容高度（与 generateTodayCard 一致）
+            // P0：将 html2canvas 渲染高度设置为「生成时间底部 + 20px」，与 onclone 截断一致
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
+            var _fb = getExportFooterBottom(exportContainer);
+            var _targetH = (_fb != null ? _fb + 20 : _contentH);
             const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
@@ -741,7 +743,7 @@
                 logging: false,
                 width: exportWidth, // 导出 PNG 宽度锁定
                 windowWidth: exportWidth,
-                height: _contentH,
+                height: _targetH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -829,29 +831,32 @@
                             divider.style.backgroundImage = 'none';
                         });
 
-                        // 记录 clone 中 footer 位置与整体高度（offset + scrollHeight），供 canvas 裁剪使用
+                        // onclone 截断根容器高度到「生成时间 + 20px」，不依赖后续 canvas 裁剪
                         try {
                             var root = clonedContainer;
-                            var footerEl = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
-                            var rootScrollHeightCss = Math.max(root.scrollHeight || 0, root.offsetHeight || 0);
-                            var footerBottomCss = footerEl ? (footerEl.offsetTop + footerEl.offsetHeight) : NaN;
-                            var targetCssHeight = footerBottomCss + 20;
-                            if (typeof window !== 'undefined') {
-                                window.__TB_EXPORT_METRICS__ = { rootScrollHeightCss, footerBottomCss, targetCssHeight };
+                            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
+                            if (footer) {
+                                footer.id = 'exportGeneratedAt';
+                                var pad = 20;
+                                var targetHeight = Math.ceil(footer.offsetTop + footer.offsetHeight + pad);
+                                console.log('[TB-ASSERT] targetHeight/rootScroll/rootOffset', { targetHeight: targetHeight, rootScroll: root.scrollHeight, rootOffset: root.offsetHeight });
+                                root.style.height = targetHeight + 'px';
+                                root.style.minHeight = '0';
+                                root.style.maxHeight = targetHeight + 'px';
+                                root.style.overflow = 'hidden';
+                                root.style.paddingBottom = '0';
                             }
-                            console.log('[TB-Export-Crop] metrics', { rootScrollHeightCss, footerBottomCss, targetCssHeight });
                         } catch (e) {
-                            console.warn('[TB-Export-Crop:onclone] 记录 metrics 失败', e);
+                            console.warn('[TB-Export-Trim] onclone 截断失败', e);
                         }
                     }
                 }
             });
-            // 仅按高度裁剪到“生成时间+20px”，宽度保持不变
-            const croppedCanvas = cropCanvasByFooter(canvas, (typeof window !== 'undefined' ? window.__TB_EXPORT_METRICS__ : null));
-
+            var exportedCanvas = canvas;
+            console.log('[TB-ASSERT] canvas', { w: exportedCanvas.width, h: exportedCanvas.height });
             let dataUrl;
             try {
-                dataUrl = croppedCanvas.toDataURL('image/png');
+                dataUrl = exportedCanvas.toDataURL('image/png');
             } catch (e) {
                 if (e.name === 'SecurityError' || (e.message && e.message.includes('tainted'))) {
                     throw new Error('导出失败：图片包含跨域内容，请确保所有图片来自本应用');
@@ -859,7 +864,7 @@
                 throw e;
             }
             const filename = generateTBFileName('png');
-            showCardPreview(dataUrl, filename);
+            showCardPreview(dataUrl, filename, { width: exportedCanvas.width, height: exportedCanvas.height });
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
@@ -5336,7 +5341,7 @@ function openEditor(mode, idx) {
         }
     }
     
-    function showCardPreview(dataUrl, filename) {
+    function showCardPreview(dataUrl, filename, canvasSize) {
         const overlay = document.createElement('div');
         overlay.id = 'cardPreviewOverlay';
         overlay.className = 'tb-preview-overlay is-open';
@@ -5360,6 +5365,9 @@ function openEditor(mode, idx) {
         downloadBtn.className = 'tb-btn tb-secondary';
         downloadBtn.textContent = '下载图片';
         downloadBtn.onclick = () => {
+            if (canvasSize && (canvasSize.width != null || canvasSize.height != null)) {
+                console.log('[TB-ASSERT] download uses canvas w/h', { w: canvasSize.width, h: canvasSize.height });
+            }
             const a = document.createElement('a');
             a.href = dataUrl; a.download = filename;
             document.body.appendChild(a); a.click(); a.remove();
@@ -5508,8 +5516,9 @@ function openEditor(mode, idx) {
             })();
             // #endregion
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
+            var _fb = getExportFooterBottom(exportContainer);
+            var _targetH = (_fb != null ? _fb + 20 : _contentH);
             const exportWidth = EXPORT_WIDTH;
-            var exportCropMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
                 useCORS: true, 
@@ -5518,7 +5527,7 @@ function openEditor(mode, idx) {
                 logging: false, // 关闭日志以减少控制台输出
                 width: exportWidth, // 导出 PNG 宽度锁定
                 windowWidth: exportWidth,
-                height: _contentH, // P0修复：按内容高度截断，避免底部大段空白
+                height: _targetH, // 生成时间底部 + 20px，与 onclone 截断一致
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5563,7 +5572,7 @@ function openEditor(mode, idx) {
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦
+                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦；高度在下方按 footer+20 截断
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
@@ -5612,46 +5621,46 @@ function openEditor(mode, idx) {
                             divider.style.backgroundImage = 'none';
                         });
 
-                        // 记录 clone 中 footer 位置与整体高度（供 cropCanvasByFooter 使用 rootScrollHeightCss / targetCssHeight）
+                        // onclone 截断根容器高度到「生成时间 + 20px」，不依赖后续 canvas 裁剪
                         try {
                             var root = clonedContainer;
-                            var footerEl = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
-                            var rootScrollHeightCss = Math.max(root.scrollHeight || 0, root.offsetHeight || 0);
-                            var footerBottomCss = footerEl ? (footerEl.offsetTop + footerEl.offsetHeight) : NaN;
-                            var targetCssHeight = footerBottomCss + 20;
-                            var metricsObj = { rootScrollHeightCss: rootScrollHeightCss, footerBottomCss: footerBottomCss, targetCssHeight: targetCssHeight };
-                            exportCropMetrics = metricsObj;
-                            if (typeof window !== 'undefined') {
-                                window.__TB_EXPORT_METRICS__ = metricsObj;
+                            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
+                            if (footer) {
+                                footer.id = 'exportGeneratedAt';
+                                var pad = 20;
+                                var targetHeight = Math.ceil(footer.offsetTop + footer.offsetHeight + pad);
+                                console.log('[TB-ASSERT] targetHeight/rootScroll/rootOffset', { targetHeight: targetHeight, rootScroll: root.scrollHeight, rootOffset: root.offsetHeight });
+                                root.style.height = targetHeight + 'px';
+                                root.style.minHeight = '0';
+                                root.style.maxHeight = targetHeight + 'px';
+                                root.style.overflow = 'hidden';
+                                root.style.paddingBottom = '0';
                             }
-                            console.log('[TB-Export-Crop:onclone]', { rootScrollHeightCss: rootScrollHeightCss, footerBottomCss: footerBottomCss, targetCssHeight: targetCssHeight });
                         } catch (e) {
-                            console.warn('[TB-Export-Crop:onclone] 记录 metrics 失败', e);
+                            console.warn('[TB-Export-Trim] onclone 截断失败', e);
                         }
                     }
                 }
             });
+            var exportedCanvas = canvas;
+            console.log('[TB-ASSERT] canvas', { w: exportedCanvas.width, h: exportedCanvas.height });
             // #region agent log
             (function () {
-                var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H3', location: 'app.js:generateTodayCard:afterHtml2canvas', message: 'canvas returned from html2canvas', data: { width: canvas && canvas.width, height: canvas && canvas.height }, timestamp: Date.now() };
+                var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H3', location: 'app.js:generateTodayCard:afterHtml2canvas', message: 'canvas returned from html2canvas', data: { width: exportedCanvas && exportedCanvas.width, height: exportedCanvas && exportedCanvas.height }, timestamp: Date.now() };
                 try { var prev = JSON.parse(localStorage.getItem('todayboard_export_debug') || '{}'); prev.all = (prev.all || []).concat(p); prev.latest = p; localStorage.setItem('todayboard_export_debug', JSON.stringify(prev)); } catch (e) {}
                 console.log('[TB-Export-Debug]', JSON.stringify(p));
                 fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
             })();
             // #endregion
             // P0修复：检查 canvas 是否有效
-            if (!canvas || canvas.width === 0 || canvas.height === 0) {
+            if (!exportedCanvas || exportedCanvas.width === 0 || exportedCanvas.height === 0) {
                 throw new Error('生成的画布无效');
             }
             
-            // 仅按高度裁剪到“生成时间+20px”，宽度不变（优先使用 onclone 闭包中的 metrics）
-            var croppedCanvas = cropCanvasByFooter(canvas, exportCropMetrics || (typeof window !== 'undefined' ? window.__TB_EXPORT_METRICS__ : null));
-            console.log('[TB-Export-Crop] croppedCanvas dimensions', { width: croppedCanvas && croppedCanvas.width, height: croppedCanvas && croppedCanvas.height });
-            
-            // P0修复：尝试导出图片数据，如果因跨域/污染失败则提示
+            // P0修复：尝试导出图片数据，如果因跨域/污染失败则提示；预览与下载共用 exportedCanvas
             let dataUrl;
             try {
-                dataUrl = croppedCanvas.toDataURL('image/png');
+                dataUrl = exportedCanvas.toDataURL('image/png');
                 // #region agent log
                 (function () {
                     var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H4', location: 'app.js:generateTodayCard:toDataURL:success', message: 'toDataURL succeeded', data: { dataUrlPrefix: typeof dataUrl === 'string' ? dataUrl.slice(0, 30) : null }, timestamp: Date.now() };
@@ -5679,7 +5688,7 @@ function openEditor(mode, idx) {
             }
             
             const filename = generateTBFileName('png');
-            showCardPreview(dataUrl, filename);
+            showCardPreview(dataUrl, filename, { width: exportedCanvas.width, height: exportedCanvas.height });
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
@@ -5816,12 +5825,12 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：将 html2canvas 渲染高度设置为容器内容高度（与 generateTodayCard 一致）
+            // P0：将 html2canvas 渲染高度设置为「生成时间底部 + 20px」，与 onclone 截断一致
             var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
-            const exportWidth = EXPORT_WIDTH;
-            // 用原始 DOM 的 offset 计算「生成时间」底部，供 canvas 裁剪
-            lastExportCloneMetrics = null;
             var _fb = getExportFooterBottom(exportContainer);
+            var _targetH = (_fb != null ? _fb + 20 : _contentH);
+            const exportWidth = EXPORT_WIDTH;
+            lastExportCloneMetrics = null;
             if (_fb != null) {
                 lastExportCloneMetrics = { footerBottom: _fb, rootScrollHeight: _contentH };
             } else {
@@ -5835,7 +5844,7 @@ function openEditor(mode, idx) {
                 logging: false,
                 width: exportWidth, // 导出 PNG 宽度锁定
                 windowWidth: exportWidth,
-                height: _contentH,
+                height: _targetH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5926,29 +5935,32 @@ function openEditor(mode, idx) {
                             divider.style.backgroundImage = 'none';
                         });
 
-                        // 记录 clone 中 footer 位置与整体高度（供 cropCanvasByFooter 使用 rootScrollHeightCss / targetCssHeight）
+                        // onclone 截断根容器高度到「生成时间 + 20px」，不依赖后续 canvas 裁剪
                         try {
                             var root = clonedContainer;
-                            var footerEl = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
-                            var rootScrollHeightCss = Math.max(root.scrollHeight || 0, root.offsetHeight || 0);
-                            var footerBottomCss = footerEl ? (footerEl.offsetTop + footerEl.offsetHeight) : NaN;
-                            var targetCssHeight = footerBottomCss + 20;
-                            if (typeof window !== 'undefined') {
-                                window.__TB_EXPORT_METRICS__ = { rootScrollHeightCss, footerBottomCss, targetCssHeight };
+                            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
+                            if (footer) {
+                                footer.id = 'exportGeneratedAt';
+                                var pad = 20;
+                                var targetHeight = Math.ceil(footer.offsetTop + footer.offsetHeight + pad);
+                                console.log('[TB-ASSERT] targetHeight/rootScroll/rootOffset', { targetHeight: targetHeight, rootScroll: root.scrollHeight, rootOffset: root.offsetHeight });
+                                root.style.height = targetHeight + 'px';
+                                root.style.minHeight = '0';
+                                root.style.maxHeight = targetHeight + 'px';
+                                root.style.overflow = 'hidden';
+                                root.style.paddingBottom = '0';
                             }
-                            console.log('[TB-Export-Crop:onclone]', { rootScrollHeightCss, footerBottomCss, targetCssHeight });
                         } catch (e) {
-                            console.warn('[TB-Export-Crop:onclone] 记录 metrics 失败', e);
+                            console.warn('[TB-Export-Trim] onclone 截断失败', e);
                         }
                     }
                 }
             });
-            // 仅按高度裁剪到“生成时间+20px”，宽度保持不变
-            const croppedCanvas = cropCanvasByFooter(canvas, (typeof window !== 'undefined' ? window.__TB_EXPORT_METRICS__ : null));
-            
+            var exportedCanvas = canvas;
+            console.log('[TB-ASSERT] canvas', { w: exportedCanvas.width, h: exportedCanvas.height });
             let dataUrl;
             try {
-                dataUrl = croppedCanvas.toDataURL('image/png');
+                dataUrl = exportedCanvas.toDataURL('image/png');
             } catch (e) {
                 if (e.name === 'SecurityError' || (e.message && e.message.includes('tainted'))) {
                     throw new Error('导出失败：图片包含跨域内容，请确保所有图片来自本应用');
@@ -5956,7 +5968,7 @@ function openEditor(mode, idx) {
                 throw e;
             }
             const filename = generateTBFileName('png');
-            showCardPreview(dataUrl, filename);
+            showCardPreview(dataUrl, filename, { width: exportedCanvas.width, height: exportedCanvas.height });
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
