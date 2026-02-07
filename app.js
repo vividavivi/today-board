@@ -734,11 +734,9 @@
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
             var PAD = 20;
-            var lastItem = root.querySelector('.tb-card-content .tb-export-record:last-child') || root.querySelector('.tb-export-record:last-child') || root.querySelector('.tb-record:last-child') || root.querySelector('.tb-item:last-child') || root.querySelector('.tb-card-item:last-child');
-            var anchor = lastItem || root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var targetCss = anchor ? Math.ceil(anchor.offsetTop + anchor.offsetHeight + PAD) : null;
-            if (targetCss != null) targetCss = Math.min(targetCss, Math.ceil(root.scrollHeight - 1));
+            var contentBottomCss = getVisibleContentBottom(root);
+            var targetCss = Math.min(rootCss, contentBottomCss + PAD);
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
                 useCORS: true, 
@@ -830,7 +828,7 @@
                 }
             });
             var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'anchor=', anchor?.id || anchor?.className);
+            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'contentBottomCss=', contentBottomCss);
             var exportedCanvas = finalCanvas;
             let dataUrl;
             try {
@@ -5138,6 +5136,26 @@ function openEditor(mode, idx) {
         return result;
     }
     /**
+     * 在 root 内遍历元素，找到真正可见内容的最底部（相对 root 的 CSS 像素），不依赖某个容器是否被撑高。
+     */
+    function getVisibleContentBottom(root) {
+        var rootRect = root.getBoundingClientRect();
+        var maxBottom = 0;
+        var nodes = root.querySelectorAll('*');
+        nodes.forEach(function (el) {
+            var style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
+            if (el.classList.contains('tb-card-view')) return;
+            if (el.id === 'cardView') return;
+            var r = el.getBoundingClientRect();
+            var w = r.width, h = r.height;
+            if (w < 2 || h < 2) return;
+            var bottom = r.bottom - rootRect.top;
+            if (bottom > maxBottom) maxBottom = bottom;
+        });
+        return Math.ceil(maxBottom);
+    }
+    /**
      * 仅裁短 canvas 高度到目标 CSS 高度对应的像素（生成时间底部 + PAD）。
      * 不改 html2canvas 的 height，不改 root.style；永远 clamp，不放弃裁剪。
      */
@@ -5516,11 +5534,9 @@ function openEditor(mode, idx) {
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
             var PAD = 20;
-            var lastItem = root.querySelector('.tb-card-content .tb-export-record:last-child') || root.querySelector('.tb-export-record:last-child') || root.querySelector('.tb-record:last-child') || root.querySelector('.tb-item:last-child') || root.querySelector('.tb-card-item:last-child');
-            var anchor = lastItem || root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var targetCss = anchor ? Math.ceil(anchor.offsetTop + anchor.offsetHeight + PAD) : null;
-            if (targetCss != null) targetCss = Math.min(targetCss, Math.ceil(root.scrollHeight - 1));
+            var contentBottomCss = getVisibleContentBottom(root);
+            var targetCss = Math.min(rootCss, contentBottomCss + PAD);
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
                 useCORS: true, 
@@ -5617,7 +5633,7 @@ function openEditor(mode, idx) {
                 }
             });
             var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'anchor=', anchor?.id || anchor?.className);
+            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'contentBottomCss=', contentBottomCss);
             var exportedCanvas = finalCanvas;
             // #region agent log
             (function () {
@@ -5804,11 +5820,9 @@ function openEditor(mode, idx) {
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
             var PAD = 20;
-            var lastItem = root.querySelector('.tb-card-content .tb-export-record:last-child') || root.querySelector('.tb-export-record:last-child') || root.querySelector('.tb-record:last-child') || root.querySelector('.tb-item:last-child') || root.querySelector('.tb-card-item:last-child');
-            var anchor = lastItem || root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var targetCss = anchor ? Math.ceil(anchor.offsetTop + anchor.offsetHeight + PAD) : null;
-            if (targetCss != null) targetCss = Math.min(targetCss, Math.ceil(root.scrollHeight - 1));
+            var contentBottomCss = getVisibleContentBottom(root);
+            var targetCss = Math.min(rootCss, contentBottomCss + PAD);
             lastExportCloneMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
@@ -5903,7 +5917,7 @@ function openEditor(mode, idx) {
                 }
             });
             var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'anchor=', anchor?.id || anchor?.className);
+            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'contentBottomCss=', contentBottomCss);
             var exportedCanvas = finalCanvas;
             let dataUrl;
             try {
