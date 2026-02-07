@@ -730,9 +730,13 @@
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // 暂时禁用高度截断：使用完整内容高度，保证导出画布与背景正常
             var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
+            var root = exportContainer;
+            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
+            var PAD = 20;
+            var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
+            var targetCss = footer ? Math.ceil((footer.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + PAD) : null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
                 useCORS: true, 
@@ -823,8 +827,9 @@
                     }
                 }
             });
-            var exportedCanvas = canvas;
-            console.log('[TB-Export] canvas.width/height', exportedCanvas.width, exportedCanvas.height);
+            var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
+            console.log('[TB-CROP]', { rootCss: rootCss, targetCss: targetCss, canvasH: canvas.height, finalH: finalCanvas.height });
+            var exportedCanvas = finalCanvas;
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
@@ -5131,6 +5136,26 @@ function openEditor(mode, idx) {
         return result;
     }
     /**
+     * 仅裁短 canvas 高度到目标 CSS 高度对应的像素（生成时间底部 + PAD）。
+     * 不改 html2canvas 的 height，不改 root.style；永远 clamp，不放弃裁剪。
+     */
+    function cropCanvasToTarget(canvas, rootCss, targetCss) {
+        if (!canvas) return canvas;
+        if (!targetCss || !Number.isFinite(rootCss) || rootCss <= 0) return canvas;
+        var scaleY = canvas.height / rootCss;
+        var targetH = Math.ceil(targetCss * scaleY);
+        targetH = Math.max(1, Math.min(canvas.height, targetH));
+        if (targetH === canvas.height) return canvas;
+        var out = document.createElement('canvas');
+        out.width = canvas.width;
+        out.height = targetH;
+        var ctx = out.getContext('2d');
+        if (!ctx) return canvas;
+        ctx.drawImage(canvas, 0, 0, canvas.width, targetH, 0, 0, canvas.width, targetH);
+        return out;
+    }
+
+    /**
      * 在 canvas 层，基于 onclone 阶段记录的 metrics（纯数值）按「生成时间 + 20px」精确裁高。
      * 只裁剪纵向高度，宽度保持不变；metrics 非法时直接返回原始 canvas。
      */
@@ -5485,9 +5510,13 @@ function openEditor(mode, idx) {
                 fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
             })();
             // #endregion
-            // 暂时禁用高度截断：使用完整内容高度
             var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
+            var root = exportContainer;
+            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
+            var PAD = 20;
+            var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
+            var targetCss = footer ? Math.ceil((footer.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + PAD) : null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
                 useCORS: true, 
@@ -5583,8 +5612,9 @@ function openEditor(mode, idx) {
                     }
                 }
             });
-            var exportedCanvas = canvas;
-            console.log('[TB-Export] canvas.width/height', exportedCanvas.width, exportedCanvas.height);
+            var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
+            console.log('[TB-CROP]', { rootCss: rootCss, targetCss: targetCss, canvasH: canvas.height, finalH: finalCanvas.height });
+            var exportedCanvas = finalCanvas;
             // #region agent log
             (function () {
                 var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H3', location: 'app.js:generateTodayCard:afterHtml2canvas', message: 'canvas returned from html2canvas', data: { width: exportedCanvas && exportedCanvas.width, height: exportedCanvas && exportedCanvas.height }, timestamp: Date.now() };
@@ -5766,9 +5796,13 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // 暂时禁用高度截断：使用完整内容高度
             var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
+            var root = exportContainer;
+            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
+            var PAD = 20;
+            var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
+            var targetCss = footer ? Math.ceil((footer.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + PAD) : null;
             lastExportCloneMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
@@ -5862,8 +5896,9 @@ function openEditor(mode, idx) {
                     }
                 }
             });
-            var exportedCanvas = canvas;
-            console.log('[TB-Export] canvas.width/height', exportedCanvas.width, exportedCanvas.height);
+            var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
+            console.log('[TB-CROP]', { rootCss: rootCss, targetCss: targetCss, canvasH: canvas.height, finalH: finalCanvas.height });
+            var exportedCanvas = finalCanvas;
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
@@ -5882,8 +5917,8 @@ function openEditor(mode, idx) {
             // 恢复默认样式
             exportContainer.style.width = '';
             exportContainer.style.maxWidth = '';
-        } catch (err) { 
-            alert(err && err.message ? err.message : '生成黑板图片失败，请稍后重试'); 
+        } catch (err) {
+            alert(err && err.message ? err.message : '生成黑板图片失败，请稍后重试');
             console.error(err);
             // 确保清理状态
             exportContainer.classList.remove('is-exporting');
