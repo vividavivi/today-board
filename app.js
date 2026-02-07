@@ -733,10 +733,12 @@
             var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
-            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var PAD = 20;
+            var lastItem = root.querySelector('.tb-card-content .tb-export-record:last-child') || root.querySelector('.tb-export-record:last-child') || root.querySelector('.tb-record:last-child') || root.querySelector('.tb-item:last-child') || root.querySelector('.tb-card-item:last-child');
+            var anchor = lastItem || root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var targetCss = footer ? Math.ceil((footer.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + PAD) : null;
+            var targetCss = anchor ? Math.ceil(anchor.offsetTop + anchor.offsetHeight + PAD) : null;
+            if (targetCss != null) targetCss = Math.min(targetCss, Math.ceil(root.scrollHeight - 1));
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
                 useCORS: true, 
@@ -828,7 +830,7 @@
                 }
             });
             var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', { rootCss: rootCss, targetCss: targetCss, canvasH: canvas.height, finalH: finalCanvas.height });
+            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'anchor=', anchor?.id || anchor?.className);
             var exportedCanvas = finalCanvas;
             let dataUrl;
             try {
@@ -5513,10 +5515,12 @@ function openEditor(mode, idx) {
             var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
-            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var PAD = 20;
+            var lastItem = root.querySelector('.tb-card-content .tb-export-record:last-child') || root.querySelector('.tb-export-record:last-child') || root.querySelector('.tb-record:last-child') || root.querySelector('.tb-item:last-child') || root.querySelector('.tb-card-item:last-child');
+            var anchor = lastItem || root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var targetCss = footer ? Math.ceil((footer.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + PAD) : null;
+            var targetCss = anchor ? Math.ceil(anchor.offsetTop + anchor.offsetHeight + PAD) : null;
+            if (targetCss != null) targetCss = Math.min(targetCss, Math.ceil(root.scrollHeight - 1));
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
                 useCORS: true, 
@@ -5613,7 +5617,7 @@ function openEditor(mode, idx) {
                 }
             });
             var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', { rootCss: rootCss, targetCss: targetCss, canvasH: canvas.height, finalH: finalCanvas.height });
+            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'anchor=', anchor?.id || anchor?.className);
             var exportedCanvas = finalCanvas;
             // #region agent log
             (function () {
@@ -5799,10 +5803,12 @@ function openEditor(mode, idx) {
             var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
-            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var PAD = 20;
+            var lastItem = root.querySelector('.tb-card-content .tb-export-record:last-child') || root.querySelector('.tb-export-record:last-child') || root.querySelector('.tb-record:last-child') || root.querySelector('.tb-item:last-child') || root.querySelector('.tb-card-item:last-child');
+            var anchor = lastItem || root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var targetCss = footer ? Math.ceil((footer.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + PAD) : null;
+            var targetCss = anchor ? Math.ceil(anchor.offsetTop + anchor.offsetHeight + PAD) : null;
+            if (targetCss != null) targetCss = Math.min(targetCss, Math.ceil(root.scrollHeight - 1));
             lastExportCloneMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: 'transparent',
@@ -5897,7 +5903,7 @@ function openEditor(mode, idx) {
                 }
             });
             var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', { rootCss: rootCss, targetCss: targetCss, canvasH: canvas.height, finalH: finalCanvas.height });
+            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'anchor=', anchor?.id || anchor?.className);
             var exportedCanvas = finalCanvas;
             let dataUrl;
             try {
