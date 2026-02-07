@@ -5141,6 +5141,8 @@ function openEditor(mode, idx) {
     function getVisibleContentBottom(root) {
         var rootRect = root.getBoundingClientRect();
         var maxBottom = 0;
+        var maxEl = null;
+        var maxElRectH = 0;
         var nodes = root.querySelectorAll('*');
         nodes.forEach(function (el) {
             var style = window.getComputedStyle(el);
@@ -5151,9 +5153,23 @@ function openEditor(mode, idx) {
             var w = r.width, h = r.height;
             if (w < 2 || h < 2) return;
             var bottom = r.bottom - rootRect.top;
-            if (bottom > maxBottom) maxBottom = bottom;
+            if (bottom > maxBottom) {
+                maxBottom = bottom;
+                maxEl = el;
+                maxElRectH = h;
+            }
         });
-        return Math.ceil(maxBottom);
+        var contentBottom = Math.ceil(maxBottom);
+        // #region agent log
+        if (maxEl) {
+            var tag = maxEl.tagName || '';
+            var id = maxEl.id || '';
+            var cls = (maxEl.className && typeof maxEl.className === 'string') ? maxEl.className : '';
+            console.log('[TB-CROP-MAXEL]', 'tag=', tag, 'id=', id, 'class=', cls, 'rectH=', maxElRectH, 'maxBottom=', maxBottom);
+            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'app.js:getVisibleContentBottom:maxEl', message: 'maxBottom element', data: { tag: tag, id: id, className: cls, rectH: maxElRectH, maxBottom: maxBottom, contentBottom: contentBottom }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'crop-maxel', hypothesisId: 'H1' }) }).catch(function () {});
+        }
+        // #endregion
+        return contentBottom;
     }
     /**
      * 仅裁短 canvas 高度到目标 CSS 高度对应的像素（生成时间底部 + PAD）。
