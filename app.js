@@ -730,20 +730,18 @@
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：将 html2canvas 渲染高度设置为「生成时间底部 + 20px」，与 onclone 截断一致
-            var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
-            var _fb = getExportFooterBottom(exportContainer);
-            var _targetH = (_fb != null ? _fb + 20 : _contentH);
+            // 暂时禁用高度截断：使用完整内容高度，保证导出画布与背景正常
+            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
-                backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
+                backgroundColor: 'transparent',
                 useCORS: true, 
                 allowTaint: true,
-                scale: Math.max(3, window.devicePixelRatio || 2), // 高清导出：至少 3 倍分辨率
+                scale: Math.max(3, window.devicePixelRatio || 2),
                 logging: false,
-                width: exportWidth, // 导出 PNG 宽度锁定
+                width: exportWidth,
                 windowWidth: exportWidth,
-                height: _targetH,
+                height: _contentH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -762,9 +760,8 @@
                     if (isFileProtocol) {
                         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) { link.remove(); });
                     }
-                    var containerBg = (typeof bgDataUrl === 'string' && bgDataUrl)
-                        ? '.tb-card-view { background-image: url(' + bgDataUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }'
-                        : '.tb-card-view { background-image: none !important; background-color: #1B1B1B !important; }';
+                    var blackboardUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
+                    var containerBg = '.tb-card-view { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
                     var textVisible = '.tb-record-content, .tb-export-content, .tb-record-head, .tb-export-head, .tb-record-index, .tb-export-index, .tb-record-time, .tb-export-time, .tb-card-title, .tb-card-date, .tb-card-footer { color: #EAEAEA !important; -webkit-text-fill-color: #EAEAEA !important; }';
                     var exportFonts = '.tb-card-title { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 32px !important; } .tb-card-date { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 16px !important; } .tb-card-footer { font-size: 14px !important; }';
                     var overrideStyle = clonedDoc.createElement('style');
@@ -773,22 +770,15 @@
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
-                        if (typeof bgDataUrl === 'string' && bgDataUrl) {
-                            clonedContainer.style.backgroundImage = 'url(' + bgDataUrl + ')';
-                            clonedContainer.style.backgroundSize = 'cover';
-                            clonedContainer.style.backgroundPosition = 'center';
-                            clonedContainer.style.backgroundRepeat = 'no-repeat';
-                        } else {
-                            clonedContainer.style.backgroundImage = 'none';
-                            clonedContainer.style.backgroundColor = '#1B1B1B';
-                        }
-                        // 只清理子元素中会 taint 的位图背景，不清根容器 .tb-card-view 的 backgroundImage
+                        clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
+                        clonedContainer.style.backgroundSize = 'cover';
+                        clonedContainer.style.backgroundPosition = 'center';
+                        clonedContainer.style.backgroundRepeat = 'no-repeat';
                         if (isFileProtocol) {
                             clonedContainer.querySelectorAll('*').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦（高度由内容与 scrollHeight 决定）
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
@@ -830,30 +820,11 @@
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
-
-                        // onclone 截断根容器高度到「生成时间 + 20px」，不依赖后续 canvas 裁剪
-                        try {
-                            var root = clonedContainer;
-                            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
-                            if (footer) {
-                                footer.id = 'exportGeneratedAt';
-                                var pad = 20;
-                                var targetHeight = Math.ceil(footer.offsetTop + footer.offsetHeight + pad);
-                                console.log('[TB-ASSERT] targetHeight/rootScroll/rootOffset', { targetHeight: targetHeight, rootScroll: root.scrollHeight, rootOffset: root.offsetHeight });
-                                root.style.height = targetHeight + 'px';
-                                root.style.minHeight = '0';
-                                root.style.maxHeight = targetHeight + 'px';
-                                root.style.overflow = 'hidden';
-                                root.style.paddingBottom = '0';
-                            }
-                        } catch (e) {
-                            console.warn('[TB-Export-Trim] onclone 截断失败', e);
-                        }
                     }
                 }
             });
             var exportedCanvas = canvas;
-            console.log('[TB-ASSERT] canvas', { w: exportedCanvas.width, h: exportedCanvas.height });
+            console.log('[TB-Export] canvas.width/height', exportedCanvas.width, exportedCanvas.height);
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
@@ -5144,21 +5115,20 @@ function openEditor(mode, idx) {
         return out;
     }
     /**
-     * 从导出容器用 offset 体系计算「生成时间」底部相对容器的 CSS 高度（px）。
-     * 仅用 offsetTop/offsetHeight + parentNode 链（不用 offsetParent，避免因定位跳过祖先导致找不到 container）。
+     * 从导出容器计算「生成时间」元素底部相对容器顶部的 CSS 高度（px）。
+     * 使用 getBoundingClientRect 保证与视口/布局一致（offsetTop 沿 parent 累加会因 offsetParent 不同而错误）。
      */
     function getExportFooterBottom(container) {
-        if (!container) return null;
+        if (!container || !container.getBoundingClientRect) return null;
         var el = container.querySelector('#cardTime') || container.querySelector('.tb-card-footer');
-        if (!el) return null;
-        var top = 0;
-        var cur = el;
-        while (cur && cur !== container) {
-            if (cur.offsetTop) top += cur.offsetTop;
-            cur = cur.parentNode;
-        }
-        if (cur !== container) return null;
-        return top + (el.offsetHeight || 0);
+        if (!el || !el.getBoundingClientRect) return null;
+        var cr = container.getBoundingClientRect();
+        var er = el.getBoundingClientRect();
+        var result = Math.ceil(er.bottom - cr.top);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:getExportFooterBottom',message:'footer bottom computed',data:{elId:el.id,elClass:el.className,containerTop:cr.top,elBottom:er.bottom,result:result},timestamp:Date.now(),sessionId:'debug-session',runId:'export-height',hypothesisId:'H1'})}).catch(function(){});
+        // #endregion
+        return result;
     }
     /**
      * 在 canvas 层，基于 onclone 阶段记录的 metrics（纯数值）按「生成时间 + 20px」精确裁高。
@@ -5515,19 +5485,18 @@ function openEditor(mode, idx) {
                 fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
             })();
             // #endregion
-            var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
-            var _fb = getExportFooterBottom(exportContainer);
-            var _targetH = (_fb != null ? _fb + 20 : _contentH);
+            // 暂时禁用高度截断：使用完整内容高度
+            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             const canvas = await html2canvas(exportContainer, { 
-                backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
+                backgroundColor: 'transparent',
                 useCORS: true, 
-                allowTaint: true, // 允许含背景图等时完成绘制，避免导出直接失败
-                scale: Math.max(3, window.devicePixelRatio || 2), // 高清导出：至少 3 倍分辨率
-                logging: false, // 关闭日志以减少控制台输出
-                width: exportWidth, // 导出 PNG 宽度锁定
+                allowTaint: true,
+                scale: Math.max(3, window.devicePixelRatio || 2),
+                logging: false,
+                width: exportWidth,
                 windowWidth: exportWidth,
-                height: _targetH, // 生成时间底部 + 20px，与 onclone 截断一致
+                height: _contentH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5546,9 +5515,8 @@ function openEditor(mode, idx) {
                     if (isFileProtocol) {
                         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) { link.remove(); });
                     }
-                    var containerBg = (typeof bgDataUrl === 'string' && bgDataUrl)
-                        ? '.tb-card-view { background-image: url(' + bgDataUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }'
-                        : '.tb-card-view { background-image: none !important; background-color: #1B1B1B !important; }';
+                    var blackboardUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
+                    var containerBg = '.tb-card-view { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
                     var textVisible = '.tb-record-content, .tb-export-content, .tb-record-head, .tb-export-head, .tb-record-index, .tb-export-index, .tb-record-time, .tb-export-time, .tb-card-title, .tb-card-date, .tb-card-footer { color: #EAEAEA !important; -webkit-text-fill-color: #EAEAEA !important; }';
                     var exportFonts = '.tb-card-title { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 32px !important; } .tb-card-date { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 16px !important; } .tb-card-footer { font-size: 14px !important; }';
                     var overrideStyle = clonedDoc.createElement('style');
@@ -5557,22 +5525,15 @@ function openEditor(mode, idx) {
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
-                        if (typeof bgDataUrl === 'string' && bgDataUrl) {
-                            clonedContainer.style.backgroundImage = 'url(' + bgDataUrl + ')';
-                            clonedContainer.style.backgroundSize = 'cover';
-                            clonedContainer.style.backgroundPosition = 'center';
-                            clonedContainer.style.backgroundRepeat = 'no-repeat';
-                        } else {
-                            clonedContainer.style.backgroundImage = 'none';
-                            clonedContainer.style.backgroundColor = '#1B1B1B';
-                        }
-                        // 只清理子元素中会 taint 的位图背景，不清根容器 .tb-card-view 的 backgroundImage
+                        clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
+                        clonedContainer.style.backgroundSize = 'cover';
+                        clonedContainer.style.backgroundPosition = 'center';
+                        clonedContainer.style.backgroundRepeat = 'no-repeat';
                         if (isFileProtocol) {
                             clonedContainer.querySelectorAll('*').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦；高度在下方按 footer+20 截断
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
@@ -5580,7 +5541,6 @@ function openEditor(mode, idx) {
                         var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
                         clonedContainer.style.height = contentH + 'px';
                         clonedContainer.style.minHeight = contentH + 'px';
-                        
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
                         var maxWidthPx = Math.floor(exportWidth * 0.7);
                         allImgs.forEach(img => {
@@ -5620,30 +5580,11 @@ function openEditor(mode, idx) {
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
-
-                        // onclone 截断根容器高度到「生成时间 + 20px」，不依赖后续 canvas 裁剪
-                        try {
-                            var root = clonedContainer;
-                            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
-                            if (footer) {
-                                footer.id = 'exportGeneratedAt';
-                                var pad = 20;
-                                var targetHeight = Math.ceil(footer.offsetTop + footer.offsetHeight + pad);
-                                console.log('[TB-ASSERT] targetHeight/rootScroll/rootOffset', { targetHeight: targetHeight, rootScroll: root.scrollHeight, rootOffset: root.offsetHeight });
-                                root.style.height = targetHeight + 'px';
-                                root.style.minHeight = '0';
-                                root.style.maxHeight = targetHeight + 'px';
-                                root.style.overflow = 'hidden';
-                                root.style.paddingBottom = '0';
-                            }
-                        } catch (e) {
-                            console.warn('[TB-Export-Trim] onclone 截断失败', e);
-                        }
                     }
                 }
             });
             var exportedCanvas = canvas;
-            console.log('[TB-ASSERT] canvas', { w: exportedCanvas.width, h: exportedCanvas.height });
+            console.log('[TB-Export] canvas.width/height', exportedCanvas.width, exportedCanvas.height);
             // #region agent log
             (function () {
                 var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H3', location: 'app.js:generateTodayCard:afterHtml2canvas', message: 'canvas returned from html2canvas', data: { width: exportedCanvas && exportedCanvas.width, height: exportedCanvas && exportedCanvas.height }, timestamp: Date.now() };
@@ -5825,26 +5766,19 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // P0：将 html2canvas 渲染高度设置为「生成时间底部 + 20px」，与 onclone 截断一致
-            var _contentH = getExportContentHeight(exportContainer) || exportContainer.scrollHeight || exportContainer.offsetHeight;
-            var _fb = getExportFooterBottom(exportContainer);
-            var _targetH = (_fb != null ? _fb + 20 : _contentH);
+            // 暂时禁用高度截断：使用完整内容高度
+            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
             lastExportCloneMetrics = null;
-            if (_fb != null) {
-                lastExportCloneMetrics = { footerBottom: _fb, rootScrollHeight: _contentH };
-            } else {
-                console.warn('[TB-Export] 未找到生成时间元素，将不裁剪高度');
-            }
             const canvas = await html2canvas(exportContainer, { 
-                backgroundColor: 'transparent', // 不覆盖根容器背景，由 .tb-card-view 的 background-image 决定
+                backgroundColor: 'transparent',
                 useCORS: true, 
                 allowTaint: true,
-                scale: Math.max(3, window.devicePixelRatio || 2), // 高清导出：至少 3 倍分辨率
+                scale: Math.max(3, window.devicePixelRatio || 2),
                 logging: false,
-                width: exportWidth, // 导出 PNG 宽度锁定
+                width: exportWidth,
                 windowWidth: exportWidth,
-                height: _targetH,
+                height: _contentH,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5863,9 +5797,8 @@ function openEditor(mode, idx) {
                     if (isFileProtocol) {
                         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) { link.remove(); });
                     }
-                    var containerBg = (typeof bgDataUrl === 'string' && bgDataUrl)
-                        ? '.tb-card-view { background-image: url(' + bgDataUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }'
-                        : '.tb-card-view { background-image: none !important; background-color: #1B1B1B !important; }';
+                    var blackboardUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
+                    var containerBg = '.tb-card-view { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
                     var textVisible = '.tb-record-content, .tb-export-content, .tb-record-head, .tb-export-head, .tb-record-index, .tb-export-index, .tb-record-time, .tb-export-time, .tb-card-title, .tb-card-date, .tb-card-footer { color: #EAEAEA !important; -webkit-text-fill-color: #EAEAEA !important; }';
                     var exportFonts = '.tb-card-title { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 32px !important; } .tb-card-date { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 16px !important; } .tb-card-footer { font-size: 14px !important; }';
                     var overrideStyle = clonedDoc.createElement('style');
@@ -5874,22 +5807,15 @@ function openEditor(mode, idx) {
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
-                        if (typeof bgDataUrl === 'string' && bgDataUrl) {
-                            clonedContainer.style.backgroundImage = 'url(' + bgDataUrl + ')';
-                            clonedContainer.style.backgroundSize = 'cover';
-                            clonedContainer.style.backgroundPosition = 'center';
-                            clonedContainer.style.backgroundRepeat = 'no-repeat';
-                        } else {
-                            clonedContainer.style.backgroundImage = 'none';
-                            clonedContainer.style.backgroundColor = '#1B1B1B';
-                        }
-                        // 只清理子元素中会 taint 的位图背景，不清根容器 .tb-card-view 的 backgroundImage
+                        clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
+                        clonedContainer.style.backgroundSize = 'cover';
+                        clonedContainer.style.backgroundPosition = 'center';
+                        clonedContainer.style.backgroundRepeat = 'no-repeat';
                         if (isFileProtocol) {
                             clonedContainer.querySelectorAll('*').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         } else {
                             clonedContainer.querySelectorAll('.tb-record, .tb-export-record').forEach(function (el) { el.style.backgroundImage = 'none'; });
                         }
-                        // 导出 clone 中锁定根容器宽度，完全与窗口尺寸解耦
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
@@ -5897,7 +5823,6 @@ function openEditor(mode, idx) {
                         var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
                         clonedContainer.style.height = contentH + 'px';
                         clonedContainer.style.minHeight = contentH + 'px';
-                        
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
                         var maxWidthPx = Math.floor(boardWidth * 0.7);
                         allImgs.forEach(function (img) {
@@ -5934,30 +5859,11 @@ function openEditor(mode, idx) {
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
-
-                        // onclone 截断根容器高度到「生成时间 + 20px」，不依赖后续 canvas 裁剪
-                        try {
-                            var root = clonedContainer;
-                            var footer = root.querySelector('#exportGeneratedAt') || root.querySelector('#cardTime');
-                            if (footer) {
-                                footer.id = 'exportGeneratedAt';
-                                var pad = 20;
-                                var targetHeight = Math.ceil(footer.offsetTop + footer.offsetHeight + pad);
-                                console.log('[TB-ASSERT] targetHeight/rootScroll/rootOffset', { targetHeight: targetHeight, rootScroll: root.scrollHeight, rootOffset: root.offsetHeight });
-                                root.style.height = targetHeight + 'px';
-                                root.style.minHeight = '0';
-                                root.style.maxHeight = targetHeight + 'px';
-                                root.style.overflow = 'hidden';
-                                root.style.paddingBottom = '0';
-                            }
-                        } catch (e) {
-                            console.warn('[TB-Export-Trim] onclone 截断失败', e);
-                        }
                     }
                 }
             });
             var exportedCanvas = canvas;
-            console.log('[TB-ASSERT] canvas', { w: exportedCanvas.width, h: exportedCanvas.height });
+            console.log('[TB-Export] canvas.width/height', exportedCanvas.width, exportedCanvas.height);
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
