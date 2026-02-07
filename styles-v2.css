@@ -68,18 +68,10 @@ html, body {
     overflow-x: hidden;
 }
 body {
-    /* 底色兜底 */
-    background-color: #0f1216;
-
-    /* 黑板材质图（多层叠加） */
-    background-image:
-        /* 暗角层：四周更暗 */
-        radial-gradient(circle at 50% 50%, rgba(0,0,0,0.00) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.75) 100%),
-        /* 中央略亮层：提升可读性 */
-        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.00) 55%),
-        /* 材质底图 */
-        url("./assets/bg/bg_blackboard_main.webp");
-
+    /* 唯一全局黑板纹理（规则 A）；保证从顶到底铺满，无纯黑断层 */
+    min-height: 100vh;
+    background-color: var(--bg);
+    background-image: url("./assets/bg/bg_blackboard_main.webp");
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -392,10 +384,7 @@ body {
 }
 
 .tb-record.is-selected {
-    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background: rgba(255,255,255,0.06);
     box-shadow: 
         inset 0 2px 4px rgba(255,255,255,0.1),
         inset 0 -1px 2px rgba(0,0,0,0.1);
@@ -497,19 +486,14 @@ body {
     font-weight: bold;
 }
 
-/* 底部操作栏 - 与页面统一使用黑板纹理底图 */
+/* 底部操作栏 - 半透明底，不重复挂黑板图（规则 A/B） */
 .tb-actionsbar {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #0f1216;
-    background-image:
-        linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.5)),
-        url("./assets/bg/bg_blackboard_main.webp");
-    background-size: cover, cover;
-    background-position: center, center;
-    background-repeat: no-repeat, no-repeat;
+    background-color: rgba(27,27,27,0.92);
+    background-image: none;
     backdrop-filter: blur(10px);
     border-top: var(--dashed-border);
     padding: 12px 16px;
@@ -614,6 +598,7 @@ body {
     position: fixed;
     inset: 0;
     z-index: 1000;
+    background-color: var(--bg);
     background-image: url("./assets/bg/bg_blackboard_main.webp");
     background-size: cover;
     background-position: center;
@@ -1129,6 +1114,7 @@ body {
     position: fixed;
     inset: 0;
     z-index: 3000;
+    background-color: var(--bg);
     background-image: url("./assets/bg/bg_blackboard_main.webp");
     background-size: cover;
     background-position: center;
@@ -1436,16 +1422,11 @@ body {
 }
 
 /* ========== 卡片导出容器样式 ========== */
-/* P0：导出预览必须复用黑板卡片的同一套 DOM 结构 + CSS */
-/* P0：导出内容区宽度 = 黑板内容区宽度（通过JS动态设置） */
+/* P0：页面常态仅 body 有黑板；卡片区透明透出 body（规则 A）。导出时 onclone 再注入黑板 */
 .tb-card-view {
-    background-image: url("./assets/bg/bg_blackboard_main.webp");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background: transparent;
     color: var(--text);
     padding: 24px;
-    /* width 和 max-width 由 JS 动态设置为黑板内容区宽度 */
     margin: 0 auto;
     min-height: 100vh;
     border: var(--dashed-border);
@@ -1456,46 +1437,22 @@ body {
     /* 禁止出现窄列布局，允许高度无限增长（长图） */
 }
 
-/* P0：导出态禁用所有遮罩层、滤镜、opacity（防止导出图片变暗） */
-.is-exporting,
-.is-exporting * {
-    /* 禁用所有滤镜效果 */
+/* P0：导出态仅作用于 #cardView（.tb-card-view），不挂 body，不影响弹窗/overlay */
+.tb-card-view.is-exporting,
+.tb-card-view.is-exporting * {
     filter: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     mix-blend-mode: normal !important;
 }
 
-/* 导出态：body 仍使用黑板纹理，与卡片区统一背景 */
-body.is-exporting {
-    background-color: #0f1216 !important;
-    background-image:
-        radial-gradient(circle at 50% 50%, rgba(0,0,0,0.00) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.75) 100%),
-        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.00) 55%),
-        url("./assets/bg/bg_blackboard_main.webp") !important;
-    background-size: cover !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
-}
-
-/* 导出态禁用所有遮罩层和overlay */
-.is-exporting .tb-editor-overlay,
-.is-exporting .tb-preview-overlay,
-.is-exporting .tb-confirm-overlay,
-.is-exporting .tb-guide-overlay,
-.is-exporting .tb-popover-overlay {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-}
-
 /* 导出态：子元素禁用背景图，避免叠层；导出容器保留黑板材质 */
-.is-exporting .tb-card-view * {
+.tb-card-view.is-exporting * {
     background-image: none !important;
 }
 
-/* 导出态：导出图片背景使用黑板材质图 */
-.is-exporting .tb-card-view {
+/* 导出态：导出容器使用黑板材质图（仅 live 测量时，实际导出在 onclone 注入） */
+.tb-card-view.is-exporting {
     background-image: url("./assets/bg/bg_blackboard_main.webp") !important;
     background-size: cover !important;
     background-position: center !important;
@@ -1503,15 +1460,15 @@ body.is-exporting {
 }
 
 /* 导出态禁用所有透明度叠加（防止变暗） */
-.is-exporting .tb-record,
-.is-exporting .tb-record-content,
-.is-exporting .tb-card-content {
+.tb-card-view.is-exporting .tb-record,
+.tb-card-view.is-exporting .tb-record-content,
+.tb-card-view.is-exporting .tb-card-content {
     opacity: 1 !important;
 }
 
 /* 导出态禁用所有 box-shadow 叠加（防止变暗） */
-.is-exporting .tb-card-view,
-.is-exporting .tb-record {
+.tb-card-view.is-exporting,
+.tb-card-view.is-exporting .tb-record {
     box-shadow: none !important;
 }
 
@@ -1520,8 +1477,8 @@ body.is-exporting {
 /* 注意：width、max-width、padding、font-size 等布局属性由正常样式控制，不在 is-exporting 下覆盖 */
 
 /* P0：导出态保护图片样式，确保与黑板一致（max-width: 70%） */
-.is-exporting .tb-card-content .tb-record-content img.todayboard-img,
-.is-exporting .tb-record-content img.todayboard-img {
+.tb-card-view.is-exporting .tb-card-content .tb-record-content img.todayboard-img,
+.tb-card-view.is-exporting .tb-record-content img.todayboard-img {
     /* 确保导出时图片样式与黑板完全一致，不被覆盖 */
     max-width: 70% !important;
     width: auto !important;
@@ -1536,7 +1493,7 @@ body.is-exporting {
 }
 
 /* P0修复：导出态确保分割线可见（使用稳定的 border divider） */
-.is-exporting .tb-divider {
+.tb-card-view.is-exporting .tb-divider {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -1550,15 +1507,15 @@ body.is-exporting {
     background-image: none !important;
 }
 
-.is-exporting .tb-divider::before,
-.is-exporting .tb-divider::after {
+.tb-card-view.is-exporting .tb-divider::before,
+.tb-card-view.is-exporting .tb-divider::after {
     display: none !important;
     content: none !important;
 }
 
 /* P0：导出态保护图片容器样式 */
-.is-exporting .tb-card-content .tb-img-wrapper,
-.is-exporting .tb-img-wrapper {
+.tb-card-view.is-exporting .tb-card-content .tb-img-wrapper,
+.tb-card-view.is-exporting .tb-img-wrapper {
     display: block !important;
     width: 100% !important;
     margin: 8px 0 12px 0 !important;

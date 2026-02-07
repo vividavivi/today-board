@@ -95,12 +95,10 @@ body::before {
     letter-spacing: 0.3px;
 }
 
-/* 增强输入框粉笔效果 - 与整体黑板材质一致 */
+/* 增强输入框粉笔效果 - 半透明底（规则 B），不重复挂黑板图 */
 .tb-editor-input {
-    background-image: url("./assets/bg/bg_blackboard_main.webp");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background-color: rgba(32,32,32,0.5);
+    background-image: none;
     border: 2px dashed rgba(255,255,255,0.2);
     box-shadow: 
         inset 0 4px 8px rgba(0,0,0,0.4),
@@ -254,12 +252,12 @@ body::before {
 }
 
 /* 导出态禁用增强效果，只使用稳定的 border */
-.is-exporting .tb-divider {
+.tb-card-view.is-exporting .tb-divider {
     background: none !important;
     background-image: none !important;
 }
 
-.is-exporting .tb-divider::after {
+.tb-card-view.is-exporting .tb-divider::after {
     display: none !important;
     content: none !important;
     animation: none !important;
@@ -404,13 +402,9 @@ body::before {
     left: 100%;
 }
 
-/* 增强卡片导出效果 - 与页面统一使用黑板纹理 */
+/* 页面常态卡片区透明透出 body 黑板（规则 A）；导出时 onclone 注入黑板 */
 .tb-card-view {
-    background-color: #0f1216;
-    background-image: url("./assets/bg/bg_blackboard_main.webp");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background: transparent;
     border: 2px dashed rgba(255,255,255,0.3);
     box-shadow: 
         inset 0 4px 8px rgba(0,0,0,0.4),
@@ -421,7 +415,7 @@ body::before {
 }
 
 /* P0：导出态使用黑板材质图作为导出图片背景 */
-.is-exporting .tb-card-view {
+.tb-card-view.is-exporting {
     background-image: url("./assets/bg/bg_blackboard_main.webp") !important;
     background-size: cover !important;
     background-position: center !important;
@@ -431,8 +425,8 @@ body::before {
 }
 
 /* P0：导出态保护图片样式，确保与黑板一致（max-width: 70%） */
-.is-exporting .tb-card-content .tb-record-content img.todayboard-img,
-.is-exporting .tb-record-content img.todayboard-img {
+.tb-card-view.is-exporting .tb-card-content .tb-record-content img.todayboard-img,
+.tb-card-view.is-exporting .tb-record-content img.todayboard-img {
     max-width: 70% !important;
     width: auto !important;
     height: auto !important;
@@ -446,8 +440,8 @@ body::before {
 }
 
 /* P0：导出态保护图片容器样式 */
-.is-exporting .tb-card-content .tb-img-wrapper,
-.is-exporting .tb-img-wrapper {
+.tb-card-view.is-exporting .tb-card-content .tb-img-wrapper,
+.tb-card-view.is-exporting .tb-img-wrapper {
     display: block !important;
     width: 100% !important;
     margin: 8px 0 12px 0 !important;

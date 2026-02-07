@@ -715,7 +715,6 @@
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
-            document.body.classList.add('is-exporting');
             await waitForImages(exportContainer);
             
             // P0修复：背景图转为 data URL 再绘制；file:// 下强制纯色，避免画布被污染导致 toDataURL 报错
@@ -734,18 +733,27 @@
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
             var PAD = 20;
+            root.classList.add('tb-export-mode');
+            var exportModeMeasureStyle = document.createElement('style');
+            exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
+            exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
+            document.head.appendChild(exportModeMeasureStyle);
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
             var contentBottomCss = getVisibleContentBottom(root);
             var targetCss = Math.min(rootCss, contentBottomCss + PAD);
+            root.classList.remove('tb-export-mode');
+            exportModeMeasureStyle.remove();
+            var compositeDiag = getExportCompositeDiagnostic(exportContainer);
+            console.log('[TB-Export-Composite] root及祖先:', compositeDiag.ancestors, '子树非默认:', compositeDiag.subtree);
             const canvas = await html2canvas(exportContainer, { 
-                backgroundColor: 'transparent',
+                backgroundColor: null,
                 useCORS: true, 
                 allowTaint: true,
                 scale: Math.max(3, window.devicePixelRatio || 2),
                 logging: false,
                 width: exportWidth,
                 windowWidth: exportWidth,
-                height: _contentH,
+                height: Math.ceil(contentBottomCss + PAD),
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -774,6 +782,11 @@
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
+                        clonedContainer.classList.add('tb-export-mode');
+                        var exportModeStyle = clonedDoc.createElement('style');
+                        exportModeStyle.setAttribute('data-export-mode', '1');
+                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                        head.appendChild(exportModeStyle);
                         clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
                         clonedContainer.style.backgroundSize = 'cover';
                         clonedContainer.style.backgroundPosition = 'center';
@@ -844,7 +857,6 @@
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
-            document.body.classList.remove('is-exporting');
             // 恢复默认样式
             exportContainer.style.width = '';
             exportContainer.style.maxWidth = '';
@@ -853,7 +865,6 @@
             alert(err && err.message ? err.message : '导出失败，请稍后重试');
             // 确保清理状态
             exportContainer.classList.remove('is-exporting');
-            document.body.classList.remove('is-exporting');
         }
     }
 
@@ -5136,6 +5147,57 @@ function openEditor(mode, idx) {
         return result;
     }
     /**
+     * 导出目标容器及祖先中影响合成的 CSS 清单（onclone 中通过 .tb-export-mode 压扁）：
+     * - backdrop-filter: styles-v2 / styles-enhanced 多处（.tb-action-bar、.tb-record 相关等）→ 最易导致马赛克透明块
+     * - filter: .tb-preview-image contrast/brightness、.is-exporting 已有 none
+     * - mix-blend-mode: .is-exporting 已有 normal
+     * - ::before/::after: body::before(粉笔斑点)、.tb-record::before(高光)、.tb-divider::after(动画线)、.tb-btn::after 等 → 叠加/透明易导致块状空白
+     * - body 多层 background-image（径向渐变+黑板图）→ clone 中改为透明，仅卡片单层黑板
+     * 结论：backdrop-filter 与 伪元素遮罩 最可能导致“马赛克/块状空白”；onclone 内对 .tb-export-mode 禁用上述并隐藏伪元素。
+     */
+    /**
+     * 诊断：列出导出目标 root 及祖先、子树节点上非默认的合成相关 computed 样式（只读，不修改 DOM）。
+     * 用于定位导致导出黑块/马赛克的选择器。
+     */
+    function getExportCompositeDiagnostic(root) {
+        var keys = ['backdropFilter', 'filter', 'mixBlendMode', 'mask', 'webkitMaskImage', 'transform', 'backgroundBlendMode'];
+        var defaults = { backdropFilter: 'none', filter: 'none', mixBlendMode: 'normal', mask: 'none', webkitMaskImage: 'none', transform: 'none', backgroundBlendMode: 'normal' };
+        function isNonDefault(style) {
+            var out = {};
+            keys.forEach(function (k) {
+                var v = style[k] || style.getPropertyValue ? style.getPropertyValue(k.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')) : '';
+                if (!v) v = style[k] || '';
+                if (v && String(v).toLowerCase() !== (defaults[k] || 'none').toLowerCase()) out[k] = v;
+            });
+            return Object.keys(out).length ? out : null;
+        }
+        function record(el) {
+            var style = window.getComputedStyle(el);
+            var non = isNonDefault(style);
+            if (!non) return null;
+            return { tag: el.tagName, id: el.id || '', class: (el.className && typeof el.className === 'string') ? el.className : '', props: non };
+        }
+        var ancestors = [];
+        var el = root;
+        while (el && el !== document.body) {
+            var r = record(el);
+            if (r) ancestors.push(r);
+            el = el.parentElement;
+        }
+        if (document.body) {
+            var br = record(document.body);
+            if (br) ancestors.push(br);
+        }
+        var subtree = [];
+        if (root && root.querySelectorAll) {
+            root.querySelectorAll('*').forEach(function (child) {
+                var sr = record(child);
+                if (sr) subtree.push(sr);
+            });
+        }
+        return { ancestors: ancestors, subtree: subtree };
+    }
+    /**
      * 在 root 内遍历元素，找到真正可见内容的最底部（相对 root 的 CSS 像素），不依赖某个容器是否被撑高。
      */
     function getVisibleContentBottom(root) {
@@ -5149,6 +5211,7 @@ function openEditor(mode, idx) {
             if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
             if (el.classList.contains('tb-card-view')) return;
             if (el.id === 'cardView') return;
+            if (el.id === 'exportGeneratedAt' || el.id === 'cardTime' || el.classList.contains('tb-card-footer')) return;
             var r = el.getBoundingClientRect();
             var w = r.width, h = r.height;
             if (w < 2 || h < 2) return;
@@ -5181,12 +5244,13 @@ function openEditor(mode, idx) {
         var scaleY = canvas.height / rootCss;
         var targetH = Math.ceil(targetCss * scaleY);
         targetH = Math.max(1, Math.min(canvas.height, targetH));
-        if (targetH === canvas.height) return canvas;
         var out = document.createElement('canvas');
         out.width = canvas.width;
         out.height = targetH;
         var ctx = out.getContext('2d');
         if (!ctx) return canvas;
+        ctx.fillStyle = 'transparent';
+        ctx.fillRect(0, 0, out.width, out.height);
         ctx.drawImage(canvas, 0, 0, canvas.width, targetH, 0, 0, canvas.width, targetH);
         return out;
     }
@@ -5501,7 +5565,6 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
-            document.body.classList.add('is-exporting');
             // P0：获取黑板内容区宽度
             const boardWidth = getBoardContentWidth();
             exportContainer.style.width = `${boardWidth}px`;
@@ -5550,18 +5613,27 @@ function openEditor(mode, idx) {
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
             var PAD = 20;
+            root.classList.add('tb-export-mode');
+            var exportModeMeasureStyle = document.createElement('style');
+            exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
+            exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
+            document.head.appendChild(exportModeMeasureStyle);
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
             var contentBottomCss = getVisibleContentBottom(root);
             var targetCss = Math.min(rootCss, contentBottomCss + PAD);
+            root.classList.remove('tb-export-mode');
+            exportModeMeasureStyle.remove();
+            var compositeDiag = getExportCompositeDiagnostic(exportContainer);
+            console.log('[TB-Export-Composite] root及祖先:', compositeDiag.ancestors, '子树非默认:', compositeDiag.subtree);
             const canvas = await html2canvas(exportContainer, { 
-                backgroundColor: 'transparent',
+                backgroundColor: null,
                 useCORS: true, 
                 allowTaint: true,
                 scale: Math.max(3, window.devicePixelRatio || 2),
                 logging: false,
                 width: exportWidth,
                 windowWidth: exportWidth,
-                height: _contentH,
+                height: Math.ceil(contentBottomCss + PAD),
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5590,6 +5662,11 @@ function openEditor(mode, idx) {
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
+                        clonedContainer.classList.add('tb-export-mode');
+                        var exportModeStyle = clonedDoc.createElement('style');
+                        exportModeStyle.setAttribute('data-export-mode', '1');
+                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                        head.appendChild(exportModeStyle);
                         clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
                         clonedContainer.style.backgroundSize = 'cover';
                         clonedContainer.style.backgroundPosition = 'center';
@@ -5699,7 +5776,6 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
-            document.body.classList.remove('is-exporting');
         } catch (err) {
             // P0修复：更好的错误提示
             const errorMsg = err.message || '未知错误';
@@ -5713,7 +5789,6 @@ function openEditor(mode, idx) {
                 exportContainer.classList.remove('is-exporting');
                 exportContainer.classList.add('visually-hidden');
             }
-            document.body.classList.remove('is-exporting');
         }
     }
 
@@ -5817,7 +5892,6 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
-            document.body.classList.add('is-exporting');
             await waitForImages(exportContainer);
             
             // P0修复：背景图转为 data URL 再绘制；file:// 下强制纯色，避免画布被污染导致 toDataURL 报错
@@ -5836,19 +5910,28 @@ function openEditor(mode, idx) {
             const exportWidth = EXPORT_WIDTH;
             var root = exportContainer;
             var PAD = 20;
+            root.classList.add('tb-export-mode');
+            var exportModeMeasureStyle = document.createElement('style');
+            exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
+            exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
+            document.head.appendChild(exportModeMeasureStyle);
             var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
             var contentBottomCss = getVisibleContentBottom(root);
             var targetCss = Math.min(rootCss, contentBottomCss + PAD);
+            root.classList.remove('tb-export-mode');
+            exportModeMeasureStyle.remove();
+            var compositeDiag = getExportCompositeDiagnostic(exportContainer);
+            console.log('[TB-Export-Composite] root及祖先:', compositeDiag.ancestors, '子树非默认:', compositeDiag.subtree);
             lastExportCloneMetrics = null;
             const canvas = await html2canvas(exportContainer, { 
-                backgroundColor: 'transparent',
+                backgroundColor: null,
                 useCORS: true, 
                 allowTaint: true,
                 scale: Math.max(3, window.devicePixelRatio || 2),
                 logging: false,
                 width: exportWidth,
                 windowWidth: exportWidth,
-                height: _contentH,
+                height: Math.ceil(contentBottomCss + PAD),
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5877,6 +5960,11 @@ function openEditor(mode, idx) {
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
+                        clonedContainer.classList.add('tb-export-mode');
+                        var exportModeStyle = clonedDoc.createElement('style');
+                        exportModeStyle.setAttribute('data-export-mode', '1');
+                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                        head.appendChild(exportModeStyle);
                         clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
                         clonedContainer.style.backgroundSize = 'cover';
                         clonedContainer.style.backgroundPosition = 'center';
@@ -5949,7 +6037,6 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
-            document.body.classList.remove('is-exporting');
             // 恢复默认样式
             exportContainer.style.width = '';
             exportContainer.style.maxWidth = '';
@@ -5958,7 +6045,6 @@ function openEditor(mode, idx) {
             console.error(err);
             // 确保清理状态
             exportContainer.classList.remove('is-exporting');
-            document.body.classList.remove('is-exporting');
         }
     }
 
@@ -6686,6 +6772,7 @@ function openEditor(mode, idx) {
         }
         if (els.editorText) {
             let currentRecognizer = null; // 语音识别实例，input/focus 时停止
+            function setListeningIndicator(active, immediate) { /* no-op: 语音指示器 UI 未使用 */ }
             // v1规范：任务框点击处理 - 独立可点击元素
             els.editorText.addEventListener('click', (e) => {
                 const checkbox = e.target && e.target.closest && e.target.closest('.tb-check');
