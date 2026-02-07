@@ -20,7 +20,9 @@ body::before {
     background-size: 250px 250px, 300px 300px;
     background-position: 0 0, 50px 50px;
     pointer-events: none;
-    z-index: -1;
+    z-index: 
+    
+    -1;
     /* 静态效果，不添加动画 */
     opacity: 0.6;
 }
@@ -402,9 +404,13 @@ body::before {
     left: 100%;
 }
 
-/* 增强卡片导出效果 */
+/* 增强卡片导出效果 - 与页面统一使用黑板纹理 */
 .tb-card-view {
-    background: linear-gradient(145deg, #2a2a2a, #242424);
+    background-color: #0f1216;
+    background-image: url("./assets/bg/bg_blackboard_main.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     border: 2px dashed rgba(255,255,255,0.3);
     box-shadow: 
         inset 0 4px 8px rgba(0,0,0,0.4),
