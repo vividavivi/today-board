@@ -86,6 +86,7 @@
         todayText: document.getElementById('todayText'),
         addImageBtn: document.getElementById('addImageBtn'),
         imageInput: document.getElementById('imageInput'),
+        cameraInput: document.getElementById('cameraInput'),
         imagePreview: document.getElementById('imagePreview'),
         writeBtn: document.getElementById('writeBtn'),
         generateCardBtn: document.getElementById('generateCardBtn'),
@@ -715,8 +716,13 @@
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
+            exportContainer.classList.add('tb-export-natural-height');
             await waitForImages(exportContainer);
-            
+            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+            var naturalHeightCss = exportContainer.scrollHeight || exportContainer.offsetHeight;
+            naturalHeightCss = Math.max(1, Math.ceil(naturalHeightCss));
+            console.log('[TB-Export] naturalHeightCss=', naturalHeightCss, '（直接按卡片自然高度截图，不裁剪）');
+
             // P0修复：背景图转为 data URL 再绘制；file:// 下强制纯色，避免画布被污染导致 toDataURL 报错
             const isFileProtocol = window.location.protocol === 'file:';
             const bgImageAbsoluteUrl = new URL('./assets/bg/bg_blackboard_main.webp', window.location.href).href;
@@ -729,33 +735,24 @@
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
-            var root = exportContainer;
-            var PAD = 20;
-            root.classList.add('tb-export-mode');
-            var exportModeMeasureStyle = document.createElement('style');
-            exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
-            exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
-            document.head.appendChild(exportModeMeasureStyle);
-            var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var contentBottomCss = getVisibleContentBottom(root);
-            var targetCss = Math.min(rootCss, contentBottomCss + PAD);
-            root.classList.remove('tb-export-mode');
-            exportModeMeasureStyle.remove();
-            var compositeDiag = getExportCompositeDiagnostic(exportContainer);
-            console.log('[TB-Export-Composite] root及祖先:', compositeDiag.ancestors, '子树非默认:', compositeDiag.subtree);
+            var scale = Math.max(2, window.devicePixelRatio || 2);
+            var MAX_PX = 8000;
+            scale = Math.min(scale, MAX_PX / exportWidth, MAX_PX / naturalHeightCss);
+            var pxW = Math.round(exportWidth * scale);
+            var pxH = Math.round(naturalHeightCss * scale);
+            console.log('[TB-Export-Scale] scale=', scale, 'pxW=', pxW, 'pxH=', pxH);
+
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: null,
                 useCORS: true, 
                 allowTaint: true,
-                scale: Math.max(3, window.devicePixelRatio || 2),
+                scale: scale,
                 logging: false,
                 width: exportWidth,
                 windowWidth: exportWidth,
-                height: Math.ceil(contentBottomCss + PAD),
+                height: naturalHeightCss,
                 ignoreElements: (element) => {
-                    // 忽略所有遮罩层和overlay
                     return element.classList && (
                         element.classList.contains('tb-editor-overlay') ||
                         element.classList.contains('tb-preview-overlay') ||
@@ -764,30 +761,43 @@
                         element.classList.contains('tb-popover-overlay')
                     );
                 },
-                onclone: (clonedDoc) => {
+                onclone: (function (naturalH) {
+                    return function oncloneExport(clonedDoc) {
                     var head = clonedDoc.head || clonedDoc.createElement('head');
                     if (!clonedDoc.head && clonedDoc.documentElement) {
                         try { clonedDoc.documentElement.insertBefore(head, clonedDoc.body || clonedDoc.documentElement.firstChild); } catch (e) {}
                     }
+                    var cloneBgSolid = '#1B1B1B';
+                    if (clonedDoc.documentElement) {
+                        clonedDoc.documentElement.style.background = cloneBgSolid;
+                        clonedDoc.documentElement.style.backgroundImage = 'none';
+                    }
+                    if (clonedDoc.body) {
+                        clonedDoc.body.style.background = cloneBgSolid;
+                        clonedDoc.body.style.backgroundImage = 'none';
+                    }
                     if (isFileProtocol) {
                         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) { link.remove(); });
                     }
-                    var blackboardUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
-                    var containerBg = '.tb-card-view { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                    var fallbackUrl = (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
+                    var exportBgUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : fallbackUrl;
+                    var exportBgUrlCss = exportBgUrl.indexOf('data:') === 0 ? ('url("' + exportBgUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '")') : ('url(' + exportBgUrl + ')');
+                    var containerBg = '.tb-card-view { background-image: ' + exportBgUrlCss + ' !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                    var rootSolid = 'html, body { background: #1B1B1B !important; background-image: none !important; }';
                     var textVisible = '.tb-record-content, .tb-export-content, .tb-record-head, .tb-export-head, .tb-record-index, .tb-export-index, .tb-record-time, .tb-export-time, .tb-card-title, .tb-card-date, .tb-card-footer { color: #EAEAEA !important; -webkit-text-fill-color: #EAEAEA !important; }';
                     var exportFonts = '.tb-card-title { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 32px !important; } .tb-card-date { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 16px !important; } .tb-card-footer { font-size: 14px !important; }';
                     var overrideStyle = clonedDoc.createElement('style');
                     overrideStyle.setAttribute('data-export-override', '1');
-                    overrideStyle.textContent = (isFileProtocol ? '* { background-image: none !important; }' : '') + containerBg + textVisible + exportFonts;
+                    overrideStyle.textContent = rootSolid + (isFileProtocol ? '* { background-image: none !important; }' : '') + containerBg + textVisible + exportFonts;
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
                         clonedContainer.classList.add('tb-export-mode');
                         var exportModeStyle = clonedDoc.createElement('style');
                         exportModeStyle.setAttribute('data-export-mode', '1');
-                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: ' + exportBgUrlCss + ' !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
                         head.appendChild(exportModeStyle);
-                        clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
+                        clonedContainer.style.backgroundImage = exportBgUrl.indexOf('data:') === 0 ? ('url("' + exportBgUrl.replace(/"/g, '\\"') + '")') : ('url(' + exportBgUrl + ')');
                         clonedContainer.style.backgroundSize = 'cover';
                         clonedContainer.style.backgroundPosition = 'center';
                         clonedContainer.style.backgroundRepeat = 'no-repeat';
@@ -799,8 +809,9 @@
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
+                        clonedContainer.style.height = naturalH + 'px';
+                        clonedContainer.style.minHeight = naturalH + 'px';
                         clonedContainer.style.boxSizing = 'border-box';
-                        
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
                         var maxWidthPx = Math.floor(exportWidth * 0.7);
                         allImgs.forEach(function (img) {
@@ -837,12 +848,20 @@
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
+                        var cloneRootBg = clonedDoc.defaultView ? clonedDoc.defaultView.getComputedStyle(clonedContainer).backgroundImage : '';
+                        console.log('[TB-VERIFY] cloneRoot bg =', cloneRootBg);
+                        if (!cloneRootBg || cloneRootBg.indexOf('data:image/') === -1) { console.log('[TB-FAIL] cloneRoot bg is not data url'); }
+                        var verifyPxW = Math.round(exportWidth * scale);
+                        var verifyPxH = Math.round(naturalH * scale);
+                        console.log('[TB-VERIFY] scale=', scale, 'pxW=', verifyPxW, 'pxH=', verifyPxH);
+                        if (verifyPxW > 8000 || verifyPxH > 8000) { console.log('[TB-FAIL] canvas too large'); }
+                        try { dumpExportComputedStyles(clonedContainer, 'clone', clonedDoc.defaultView); } catch (e) { console.warn('[TB-Export-Dump] clone', e); }
                     }
-                }
+                    };
+                })(naturalHeightCss)
             });
-            var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'contentBottomCss=', contentBottomCss);
-            var exportedCanvas = finalCanvas;
+            var exportedCanvas = canvas;
+            console.log('[TB-RESULT] direct natural height finalCanvas=' + exportedCanvas.width + ' x ' + exportedCanvas.height);
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
@@ -857,14 +876,14 @@
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
-            // 恢复默认样式
+            exportContainer.classList.remove('tb-export-natural-height');
             exportContainer.style.width = '';
             exportContainer.style.maxWidth = '';
         } catch (err) {
             console.error(err);
             alert(err && err.message ? err.message : '导出失败，请稍后重试');
-            // 确保清理状态
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('tb-export-natural-height');
         }
     }
 
@@ -4655,6 +4674,48 @@ function openEditor(mode, idx) {
     // v1规范：不再读取原图，统一使用系统源图
     // 此函数保留用于兼容性，但不再使用
 
+    /* ---------- 拍照便签：主界面拍照后直接作为新便签 ---------- */
+    async function handleCameraPhoto(ev) {
+        const input = ev && ev.target;
+        const fileList = input && input.files;
+        if (!fileList || fileList.length === 0) {
+            if (els.cameraInput) els.cameraInput.value = '';
+            return;
+        }
+        const file = Array.from(fileList).find(f => f.type.startsWith('image/'));
+        if (els.cameraInput) els.cameraInput.value = '';
+        if (!file) {
+            showToast('请拍摄或选择一张图片');
+            return;
+        }
+        try {
+            showToast('正在处理…');
+            const sourceImage = await processSourceImage(file, SOURCE_IMAGE_COMPRESS);
+            const ext = getExtFromMime(file.type);
+            const name = generateTBFileName(ext);
+            const escapedSrc = (sourceImage || '').replace(/"/g, '&quot;');
+            const textHtml = '<p><span class="tb-img-wrapper"><img src="' + escapedSrc + '" class="todayboard-img" alt="" /></span></p>';
+            const nowHM = formatTimeHM(new Date());
+            const list = loadRecords();
+            list.push({
+                time: nowHM,
+                text: '',
+                textHtml: textHtml,
+                images: [sourceImage],
+                imageNames: [name],
+                pinned: false,
+                textStyle: {},
+                richText: [],
+            });
+            saveRecords(list);
+            renderRecords();
+            showToast('已添加拍照便签');
+        } catch (err) {
+            console.error('拍照便签处理失败', err);
+            showToast('添加失败，请重试');
+        }
+    }
+
     /* ---------- 图片选择（v1规范：统一源图原则） ---------- */
     async function handleSelectedImages(fileList) {
         if (!fileList || fileList.length === 0) {
@@ -5142,7 +5203,6 @@ function openEditor(mode, idx) {
         var er = el.getBoundingClientRect();
         var result = Math.ceil(er.bottom - cr.top);
         // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:getExportFooterBottom',message:'footer bottom computed',data:{elId:el.id,elClass:el.className,containerTop:cr.top,elBottom:er.bottom,result:result},timestamp:Date.now(),sessionId:'debug-session',runId:'export-height',hypothesisId:'H1'})}).catch(function(){});
         // #endregion
         return result;
     }
@@ -5155,6 +5215,90 @@ function openEditor(mode, idx) {
      * - body 多层 background-image（径向渐变+黑板图）→ clone 中改为透明，仅卡片单层黑板
      * 结论：backdrop-filter 与 伪元素遮罩 最可能导致“马赛克/块状空白”；onclone 内对 .tb-export-mode 禁用上述并隐藏伪元素。
      */
+    /**
+     * 可验证定位：对导出根节点及关键子节点抓取 getComputedStyle（含 ::before/::after），
+     * 输出 selector + 关键字段，便于对比「常态 vs clone」找出马赛克/黑块来源。
+     * @param {Element} root - 导出根节点（html2canvas 的 element）
+     * @param {string} label - 如 "live" 或 "clone"
+     * @param {Window|null} win - 用于 getComputedStyle 的 window（clone 时传 clonedDoc.defaultView）
+     */
+    function dumpExportComputedStyles(root, label, win) {
+        if (!root) {
+            console.log('[TB-Export-Dump]', label, 'skip (no root)');
+            return;
+        }
+        if (label === 'clone' && !win) {
+            console.log('[TB-Export-Dump]', label, 'skip (clone has no defaultView)');
+            return;
+        }
+        win = win || (root.ownerDocument && root.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+        if (!win || typeof win.getComputedStyle !== 'function') {
+            console.log('[TB-Export-Dump]', label, 'skip (no getComputedStyle)');
+            return;
+        }
+        var keys = ['backgroundImage', 'backgroundColor', 'filter', 'backdropFilter', 'WebkitBackdropFilter', 'mixBlendMode', 'backgroundBlendMode', 'maskImage', 'WebkitMaskImage', 'transform', 'position', 'overflow', 'opacity'];
+        var pseudoKeys = ['content', 'backgroundImage', 'backgroundColor', 'opacity', 'position', 'inset', 'top', 'left', 'right', 'bottom', 'filter', 'backdropFilter', 'transform', 'display'];
+        function getSelector(el) {
+            if (!el) return '';
+            var s = el.tagName || '';
+            if (el.id) s += '#' + el.id;
+            if (el.className && typeof el.className === 'string') s += '.' + el.className.trim().replace(/\s+/g, '.');
+            return s;
+        }
+        function pick(style, kList) {
+            var out = {};
+            kList.forEach(function (k) {
+                var v = style[k];
+                if (v === undefined || v === null) {
+                    var dashed = k.replace(/([A-Z])/g, '-$1').toLowerCase();
+                    if (k.indexOf('Webkit') === 0 || k.indexOf('webkit') === 0) dashed = '-' + dashed;
+                    v = style.getPropertyValue ? style.getPropertyValue(dashed) : '';
+                }
+                if (v !== undefined && v !== null && v !== '') out[k] = String(v);
+            });
+            return out;
+        }
+        var nodes = [];
+        nodes.push({ el: root, sel: 'root(' + getSelector(root) + ')' });
+        if (root.querySelector) {
+            var cardText = root.querySelector('#cardText');
+            if (cardText) nodes.push({ el: cardText, sel: '#cardText' });
+            var cardHeader = root.querySelector('.tb-card-header');
+            if (cardHeader) nodes.push({ el: cardHeader, sel: '.tb-card-header' });
+            var cardFooter = root.querySelector('.tb-card-footer');
+            if (cardFooter) nodes.push({ el: cardFooter, sel: '.tb-card-footer' });
+            var firstRecord = root.querySelector('.tb-export-record, .tb-record');
+            if (firstRecord) nodes.push({ el: firstRecord, sel: '.tb-export-record/.tb-record' });
+            var firstDivider = root.querySelector('.tb-divider');
+            if (firstDivider) nodes.push({ el: firstDivider, sel: '.tb-divider' });
+        }
+        var out = { label: label, nodes: [] };
+        nodes.forEach(function (n) {
+            var el = n.el;
+            var sel = n.sel;
+            var entry = { selector: sel, computed: null, before: null, after: null };
+            try {
+                var style = win.getComputedStyle(el);
+                entry.computed = pick(style, keys);
+            } catch (e) {
+                entry.computed = { _error: String(e && e.message) };
+            }
+            try {
+                var beforeStyle = win.getComputedStyle(el, '::before');
+                entry.before = pick(beforeStyle, pseudoKeys);
+            } catch (e) {
+                entry.before = { _error: String(e && e.message) };
+            }
+            try {
+                var afterStyle = win.getComputedStyle(el, '::after');
+                entry.after = pick(afterStyle, pseudoKeys);
+            } catch (e) {
+                entry.after = { _error: String(e && e.message) };
+            }
+            out.nodes.push(entry);
+        });
+        console.log('[TB-Export-Dump]', label, JSON.stringify(out, null, 2));
+    }
     /**
      * 诊断：列出导出目标 root 及祖先、子树节点上非默认的合成相关 computed 样式（只读，不修改 DOM）。
      * 用于定位导致导出黑块/马赛克的选择器。
@@ -5198,60 +5342,75 @@ function openEditor(mode, idx) {
         return { ancestors: ancestors, subtree: subtree };
     }
     /**
-     * 在 root 内遍历元素，找到真正可见内容的最底部（相对 root 的 CSS 像素），不依赖某个容器是否被撑高。
+     * 固定内容底部锚点，不再用 maxEl 猜。优先：最后一条 .tb-export-record/.tb-record；若无：footer(#exportGeneratedAt/.tb-card-footer)；最后：root.scrollHeight。
      */
     function getVisibleContentBottom(root) {
         var rootRect = root.getBoundingClientRect();
-        var maxBottom = 0;
-        var maxEl = null;
-        var maxElRectH = 0;
-        var nodes = root.querySelectorAll('*');
-        nodes.forEach(function (el) {
-            var style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
-            if (el.classList.contains('tb-card-view')) return;
-            if (el.id === 'cardView') return;
-            if (el.id === 'exportGeneratedAt' || el.id === 'cardTime' || el.classList.contains('tb-card-footer')) return;
-            var r = el.getBoundingClientRect();
-            var w = r.width, h = r.height;
-            if (w < 2 || h < 2) return;
-            var bottom = r.bottom - rootRect.top;
-            if (bottom > maxBottom) {
-                maxBottom = bottom;
-                maxEl = el;
-                maxElRectH = h;
+        var rootTop = rootRect.top;
+        var used = 'scrollHeight';
+        var bottom = 0;
+        var recordIndex = -1;
+        var records = root.querySelectorAll('.tb-export-record, .tb-record');
+        if (records.length > 0) {
+            var lastRecord = records[records.length - 1];
+            var r = lastRecord.getBoundingClientRect();
+            if (r.height >= 2) {
+                bottom = r.bottom - rootTop;
+                used = 'record';
+                recordIndex = records.length - 1;
             }
-        });
-        var contentBottom = Math.ceil(maxBottom);
-        // #region agent log
-        if (maxEl) {
-            var tag = maxEl.tagName || '';
-            var id = maxEl.id || '';
-            var cls = (maxEl.className && typeof maxEl.className === 'string') ? maxEl.className : '';
-            console.log('[TB-CROP-MAXEL]', 'tag=', tag, 'id=', id, 'class=', cls, 'rectH=', maxElRectH, 'maxBottom=', maxBottom);
-            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'app.js:getVisibleContentBottom:maxEl', message: 'maxBottom element', data: { tag: tag, id: id, className: cls, rectH: maxElRectH, maxBottom: maxBottom, contentBottom: contentBottom }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'crop-maxel', hypothesisId: 'H1' }) }).catch(function () {});
         }
-        // #endregion
-        return contentBottom;
+        if (used !== 'record') {
+            var footer = root.querySelector('#exportGeneratedAt, .tb-card-footer');
+            if (footer) {
+                var fr = footer.getBoundingClientRect();
+                if (fr.height >= 2) {
+                    bottom = fr.bottom - rootTop;
+                    used = 'footer';
+                }
+            }
+        }
+        if (used === 'scrollHeight' || bottom <= 0) {
+            bottom = root.scrollHeight || root.offsetHeight || 0;
+            used = 'scrollHeight';
+        }
+        var contentBottomCss = Math.ceil(bottom);
+        console.log('[TB-ANCHOR] used=' + used + ' bottom=' + bottom + ' rootTop=' + rootTop + ' contentBottomCss=' + contentBottomCss + (recordIndex >= 0 ? ' recordIndex=' + recordIndex : ''));
+        return contentBottomCss;
     }
+    var CROP_PAD = 24;
     /**
-     * 仅裁短 canvas 高度到目标 CSS 高度对应的像素（生成时间底部 + PAD）。
-     * 不改 html2canvas 的 height，不改 root.style；永远 clamp，不放弃裁剪。
+     * 以 contentBottomCss 为基准裁短 canvas 高度，导出紧贴内容底部 + 留白，不做大块空白。
+     * finalCssH = min(targetCss, contentBottomCss + CROP_PAD)，且 <= rootCss；
+     * finalH = round(canvasH * (finalCssH/rootCss))，真实裁剪到新 canvas。
      */
-    function cropCanvasToTarget(canvas, rootCss, targetCss) {
+    function cropCanvasToTarget(canvas, rootCss, targetCss, contentBottomCss, contentPad) {
         if (!canvas) return canvas;
-        if (!targetCss || !Number.isFinite(rootCss) || rootCss <= 0) return canvas;
-        var scaleY = canvas.height / rootCss;
-        var targetH = Math.ceil(targetCss * scaleY);
-        targetH = Math.max(1, Math.min(canvas.height, targetH));
+        if (!Number.isFinite(rootCss) || rootCss <= 0) return canvas;
+        var pad = (contentPad != null && Number.isFinite(contentPad)) ? contentPad : CROP_PAD;
+        var finalCssH;
+        if (contentBottomCss != null && Number.isFinite(contentBottomCss)) {
+            finalCssH = Math.min(contentBottomCss + pad, rootCss);
+        } else {
+            finalCssH = Math.min(targetCss != null ? targetCss : rootCss, rootCss);
+        }
+        if (!finalCssH || finalCssH <= 0) return canvas;
+        var canvasH = canvas.height;
+        var ratio = finalCssH / rootCss;
+        var finalH = Math.round(canvasH * ratio);
+        finalH = Math.max(1, Math.min(canvas.height, finalH));
         var out = document.createElement('canvas');
         out.width = canvas.width;
-        out.height = targetH;
+        out.height = finalH;
         var ctx = out.getContext('2d');
         if (!ctx) return canvas;
-        ctx.fillStyle = 'transparent';
-        ctx.fillRect(0, 0, out.width, out.height);
-        ctx.drawImage(canvas, 0, 0, canvas.width, targetH, 0, 0, canvas.width, targetH);
+        ctx.drawImage(canvas, 0, 0, canvas.width, finalH, 0, 0, canvas.width, finalH);
+        var ratioActual = finalH / canvasH;
+        var ratioErr = ratio > 0 ? Math.abs(ratioActual - ratio) / ratio : 0;
+        console.log('[TB-CROP-FINAL] finalCssH=' + finalCssH + ' finalH=' + finalH + ' canvasH=' + canvasH + ' ratio=' + ratio.toFixed(4));
+        if (ratioErr > 0.02) {
+            console.warn('[TB-CROP-FINAL] finalH 与 contentBottomCss 对齐偏差 >2% ratioErr=' + (ratioErr * 100).toFixed(2) + '%');
+        }
         return out;
     }
 
@@ -5493,7 +5652,6 @@ function openEditor(mode, idx) {
             var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H1', location: 'app.js:generateTodayCard:entry', message: 'generateTodayCard entry', data: { href: window.location.href, protocol: window.location.protocol }, timestamp: Date.now() };
             try { localStorage.setItem('todayboard_export_debug', JSON.stringify({ latest: p, all: (JSON.parse(localStorage.getItem('todayboard_export_debug') || '{}').all || []).concat(p) })); } catch (e) {}
             console.log('[TB-Export-Debug]', JSON.stringify(p));
-            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
         })();
         // #endregion
         
@@ -5565,20 +5723,21 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('export-mode');
             // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
+            exportContainer.classList.add('tb-export-natural-height');
             // P0：获取黑板内容区宽度
             const boardWidth = getBoardContentWidth();
             exportContainer.style.width = `${boardWidth}px`;
             exportContainer.style.maxWidth = `${boardWidth}px`;
-            
-            // P0修复：等待图片加载完成
             try {
                 await waitForImages(exportContainer);
             } catch (e) {
                 console.warn('等待图片加载时出错:', e);
-                // 继续执行，不阻塞导出
             }
-            
-            // P0修复：根容器必须使用黑板纹理；优先将 bg_blackboard_main.webp 转为 data URL（绝对 URL）
+            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+            var naturalHeightCss = exportContainer.scrollHeight || exportContainer.offsetHeight;
+            naturalHeightCss = Math.max(1, Math.ceil(naturalHeightCss));
+            console.log('[TB-Export] naturalHeightCss=', naturalHeightCss, '（直接按卡片自然高度截图，不裁剪）');
+
             const isFileProtocol = window.location.protocol === 'file:';
             const bgImageAbsoluteUrl = new URL('./assets/bg/bg_blackboard_main.webp', window.location.href).href;
             let bgDataUrl = null;
@@ -5590,50 +5749,21 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            // #region agent log
-            (function () {
-                var container = els.cardView;
-                var imgs = container ? Array.from(container.querySelectorAll('img')) : [];
-                var imgSummary = imgs.map(function (img) {
-                    var src = img.currentSrc || img.src || '';
-                    var kind = 'other';
-                    if (!src) kind = 'empty';
-                    else if (src.indexOf('data:') === 0) kind = 'data';
-                    else if (src.indexOf('http://') === 0 || src.indexOf('https://') === 0) kind = 'http';
-                    else if (src.indexOf('file://') === 0) kind = 'file';
-                    return { kind: kind, length: src.length };
-                });
-                var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H2', location: 'app.js:generateTodayCard:bgDataUrl', message: 'bgDataUrl and image summary before html2canvas', data: { hasBgDataUrl: !!bgDataUrl, bgDataUrlLength: bgDataUrl && typeof bgDataUrl === 'string' ? bgDataUrl.length : 0, bgImageAbsoluteUrl: bgImageAbsoluteUrl, imgCount: imgs.length, imgSummary: imgSummary }, timestamp: Date.now() };
-                try { var prev = JSON.parse(localStorage.getItem('todayboard_export_debug') || '{}'); prev.all = (prev.all || []).concat(p); prev.latest = p; localStorage.setItem('todayboard_export_debug', JSON.stringify(prev)); } catch (e) {}
-                console.log('[TB-Export-Debug]', JSON.stringify(p));
-                fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
-            })();
-            // #endregion
-            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
-            var root = exportContainer;
-            var PAD = 20;
-            root.classList.add('tb-export-mode');
-            var exportModeMeasureStyle = document.createElement('style');
-            exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
-            exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
-            document.head.appendChild(exportModeMeasureStyle);
-            var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var contentBottomCss = getVisibleContentBottom(root);
-            var targetCss = Math.min(rootCss, contentBottomCss + PAD);
-            root.classList.remove('tb-export-mode');
-            exportModeMeasureStyle.remove();
-            var compositeDiag = getExportCompositeDiagnostic(exportContainer);
-            console.log('[TB-Export-Composite] root及祖先:', compositeDiag.ancestors, '子树非默认:', compositeDiag.subtree);
-            const canvas = await html2canvas(exportContainer, { 
+            var scale = Math.max(2, window.devicePixelRatio || 2);
+            var MAX_PX = 8000;
+            scale = Math.min(scale, MAX_PX / exportWidth, MAX_PX / naturalHeightCss);
+            console.log('[TB-Export-Scale] scale=', scale, 'naturalHeightCss=', naturalHeightCss);
+
+            const canvas = await html2canvas(exportContainer, {
                 backgroundColor: null,
-                useCORS: true, 
+                useCORS: true,
                 allowTaint: true,
-                scale: Math.max(3, window.devicePixelRatio || 2),
+                scale: scale,
                 logging: false,
                 width: exportWidth,
                 windowWidth: exportWidth,
-                height: Math.ceil(contentBottomCss + PAD),
+                height: naturalHeightCss,
                 ignoreElements: (element) => {
                     // 忽略所有遮罩层和overlay
                     return element.classList && (
@@ -5649,25 +5779,37 @@ function openEditor(mode, idx) {
                     if (!clonedDoc.head && clonedDoc.documentElement) {
                         try { clonedDoc.documentElement.insertBefore(head, clonedDoc.body || clonedDoc.documentElement.firstChild); } catch (e) {}
                     }
+                    var cloneBgSolid = '#1B1B1B';
+                    if (clonedDoc.documentElement) {
+                        clonedDoc.documentElement.style.background = cloneBgSolid;
+                        clonedDoc.documentElement.style.backgroundImage = 'none';
+                    }
+                    if (clonedDoc.body) {
+                        clonedDoc.body.style.background = cloneBgSolid;
+                        clonedDoc.body.style.backgroundImage = 'none';
+                    }
                     if (isFileProtocol) {
                         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) { link.remove(); });
                     }
-                    var blackboardUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
-                    var containerBg = '.tb-card-view { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                    var fallbackUrl = (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
+                    var exportBgUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : fallbackUrl;
+                    var exportBgUrlCss = exportBgUrl.indexOf('data:') === 0 ? ('url("' + exportBgUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '")') : ('url(' + exportBgUrl + ')');
+                    var containerBg = '.tb-card-view { background-image: ' + exportBgUrlCss + ' !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                    var rootSolid = 'html, body { background: #1B1B1B !important; background-image: none !important; }';
                     var textVisible = '.tb-record-content, .tb-export-content, .tb-record-head, .tb-export-head, .tb-record-index, .tb-export-index, .tb-record-time, .tb-export-time, .tb-card-title, .tb-card-date, .tb-card-footer { color: #EAEAEA !important; -webkit-text-fill-color: #EAEAEA !important; }';
                     var exportFonts = '.tb-card-title { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 32px !important; } .tb-card-date { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 16px !important; } .tb-card-footer { font-size: 14px !important; }';
                     var overrideStyle = clonedDoc.createElement('style');
                     overrideStyle.setAttribute('data-export-override', '1');
-                    overrideStyle.textContent = (isFileProtocol ? '* { background-image: none !important; }' : '') + containerBg + textVisible + exportFonts;
+                    overrideStyle.textContent = rootSolid + (isFileProtocol ? '* { background-image: none !important; }' : '') + containerBg + textVisible + exportFonts;
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
                         clonedContainer.classList.add('tb-export-mode');
                         var exportModeStyle = clonedDoc.createElement('style');
                         exportModeStyle.setAttribute('data-export-mode', '1');
-                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: ' + exportBgUrlCss + ' !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
                         head.appendChild(exportModeStyle);
-                        clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
+                        clonedContainer.style.backgroundImage = exportBgUrl.indexOf('data:') === 0 ? ('url("' + exportBgUrl.replace(/"/g, '\\"') + '")') : ('url(' + exportBgUrl + ')');
                         clonedContainer.style.backgroundSize = 'cover';
                         clonedContainer.style.backgroundPosition = 'center';
                         clonedContainer.style.backgroundRepeat = 'no-repeat';
@@ -5679,14 +5821,12 @@ function openEditor(mode, idx) {
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
+                        clonedContainer.style.height = naturalHeightCss + 'px';
+                        clonedContainer.style.minHeight = naturalHeightCss + 'px';
                         clonedContainer.style.boxSizing = 'border-box';
-                        var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
-                        clonedContainer.style.height = contentH + 'px';
-                        clonedContainer.style.minHeight = contentH + 'px';
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
                         var maxWidthPx = Math.floor(exportWidth * 0.7);
                         allImgs.forEach(img => {
-                            // 与主页一致：图片最大宽度为容器 70%
                             img.style.maxWidth = `${maxWidthPx}px`;
                             img.style.width = 'auto';
                             img.style.height = 'auto';
@@ -5698,16 +5838,12 @@ function openEditor(mode, idx) {
                             img.style.margin = '0';
                             img.style.border = '1px dashed rgba(255,255,255,0.35)';
                         });
-                        
-                        // 确保图片容器样式正确
                         const imgWrappers = clonedContainer.querySelectorAll('.tb-img-wrapper');
                         imgWrappers.forEach(wrap => {
                             wrap.style.display = 'block';
                             wrap.style.width = '100%';
                             wrap.style.margin = '8px 0 12px 0';
                         });
-                        
-                        // P0修复：确保分割线在导出时可见（使用稳定的 border divider）
                         const dividers = clonedContainer.querySelectorAll('.tb-divider');
                         dividers.forEach(divider => {
                             divider.style.display = 'block';
@@ -5722,18 +5858,24 @@ function openEditor(mode, idx) {
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
+                        var cloneRootBg = clonedDoc.defaultView ? clonedDoc.defaultView.getComputedStyle(clonedContainer).backgroundImage : '';
+                        console.log('[TB-VERIFY] cloneRoot bg =', cloneRootBg);
+                        if (!cloneRootBg || cloneRootBg.indexOf('data:image/') === -1) { console.log('[TB-FAIL] cloneRoot bg is not data url'); }
+                        var verifyPxW = Math.round(exportWidth * scale);
+                        var verifyPxH = Math.round(naturalHeightCss * scale);
+                        console.log('[TB-VERIFY] scale=', scale, 'pxW=', verifyPxW, 'pxH=', verifyPxH);
+                        if (verifyPxW > 8000 || verifyPxH > 8000) { console.log('[TB-FAIL] canvas too large'); }
+                        try { dumpExportComputedStyles(clonedContainer, 'clone', clonedDoc.defaultView); } catch (e) { console.warn('[TB-Export-Dump] clone', e); }
                     }
                 }
             });
-            var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'contentBottomCss=', contentBottomCss);
-            var exportedCanvas = finalCanvas;
+            var exportedCanvas = canvas;
+            console.log('[TB-RESULT] direct natural height finalCanvas=' + exportedCanvas.width + ' x ' + exportedCanvas.height);
             // #region agent log
             (function () {
                 var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H3', location: 'app.js:generateTodayCard:afterHtml2canvas', message: 'canvas returned from html2canvas', data: { width: exportedCanvas && exportedCanvas.width, height: exportedCanvas && exportedCanvas.height }, timestamp: Date.now() };
                 try { var prev = JSON.parse(localStorage.getItem('todayboard_export_debug') || '{}'); prev.all = (prev.all || []).concat(p); prev.latest = p; localStorage.setItem('todayboard_export_debug', JSON.stringify(prev)); } catch (e) {}
                 console.log('[TB-Export-Debug]', JSON.stringify(p));
-                fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
             })();
             // #endregion
             // P0修复：检查 canvas 是否有效
@@ -5750,7 +5892,6 @@ function openEditor(mode, idx) {
                     var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H4', location: 'app.js:generateTodayCard:toDataURL:success', message: 'toDataURL succeeded', data: { dataUrlPrefix: typeof dataUrl === 'string' ? dataUrl.slice(0, 30) : null }, timestamp: Date.now() };
                     try { var prev = JSON.parse(localStorage.getItem('todayboard_export_debug') || '{}'); prev.all = (prev.all || []).concat(p); prev.latest = p; localStorage.setItem('todayboard_export_debug', JSON.stringify(prev)); } catch (e) {}
                     console.log('[TB-Export-Debug]', JSON.stringify(p));
-                    fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
                 })();
                 // #endregion
             } catch (e) {
@@ -5759,7 +5900,6 @@ function openEditor(mode, idx) {
                     var p = { sessionId: 'debug-session', runId: 'pre-fix-1', hypothesisId: 'H4', location: 'app.js:generateTodayCard:toDataURL:error', message: 'toDataURL threw error', data: { name: e && e.name, message: e && e.message }, timestamp: Date.now() };
                     try { var prev = JSON.parse(localStorage.getItem('todayboard_export_debug') || '{}'); prev.all = (prev.all || []).concat(p); prev.latest = p; localStorage.setItem('todayboard_export_debug', JSON.stringify(prev)); } catch (e2) {}
                     console.log('[TB-Export-Debug]', JSON.stringify(p));
-                    fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(function () {});
                 })();
                 // #endregion
                 if (e.name === 'SecurityError' || e.message && e.message.includes('tainted')) {
@@ -5776,11 +5916,12 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('tb-export-natural-height');
         } catch (err) {
-            // P0修复：更好的错误提示
             const errorMsg = err.message || '未知错误';
             showToast(`导出失败：${errorMsg}`);
             console.error('导出失败:', err);
+            exportContainer.classList.remove('tb-export-natural-height');
             console.error('错误堆栈:', err.stack);
             
             // 确保清理状态
@@ -5890,11 +6031,14 @@ function openEditor(mode, idx) {
             await ensureHtml2Canvas();
             exportContainer.classList.remove('visually-hidden');
             exportContainer.classList.add('export-mode');
-            // P0：添加 is-exporting class 禁用所有遮罩层和滤镜
             exportContainer.classList.add('is-exporting');
+            exportContainer.classList.add('tb-export-natural-height');
             await waitForImages(exportContainer);
-            
-            // P0修复：背景图转为 data URL 再绘制；file:// 下强制纯色，避免画布被污染导致 toDataURL 报错
+            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+            var naturalHeightCss = exportContainer.scrollHeight || exportContainer.offsetHeight;
+            naturalHeightCss = Math.max(1, Math.ceil(naturalHeightCss));
+            console.log('[TB-Export] naturalHeightCss=', naturalHeightCss, '（直接按卡片自然高度截图，不裁剪）');
+
             const isFileProtocol = window.location.protocol === 'file:';
             const bgImageAbsoluteUrl = new URL('./assets/bg/bg_blackboard_main.webp', window.location.href).href;
             let bgDataUrl = null;
@@ -5906,34 +6050,22 @@ function openEditor(mode, idx) {
                     try { showToast('当前为本地文件打开，导出为纯色背景；通过 http 访问页面可获得黑板纹理'); } catch (_) {}
                 }
             }
-            var _contentH = exportContainer.scrollHeight || exportContainer.offsetHeight;
             const exportWidth = EXPORT_WIDTH;
-            var root = exportContainer;
-            var PAD = 20;
-            root.classList.add('tb-export-mode');
-            var exportModeMeasureStyle = document.createElement('style');
-            exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
-            exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
-            document.head.appendChild(exportModeMeasureStyle);
-            var rootCss = Math.max(root.scrollHeight, root.offsetHeight);
-            var contentBottomCss = getVisibleContentBottom(root);
-            var targetCss = Math.min(rootCss, contentBottomCss + PAD);
-            root.classList.remove('tb-export-mode');
-            exportModeMeasureStyle.remove();
-            var compositeDiag = getExportCompositeDiagnostic(exportContainer);
-            console.log('[TB-Export-Composite] root及祖先:', compositeDiag.ancestors, '子树非默认:', compositeDiag.subtree);
-            lastExportCloneMetrics = null;
-            const canvas = await html2canvas(exportContainer, { 
+            var scale = Math.max(2, window.devicePixelRatio || 2);
+            var MAX_PX = 8000;
+            scale = Math.min(scale, MAX_PX / exportWidth, MAX_PX / naturalHeightCss);
+            console.log('[TB-Export-Scale] scale=', scale, 'naturalHeightCss=', naturalHeightCss);
+
+            const canvas = await html2canvas(exportContainer, {
                 backgroundColor: null,
-                useCORS: true, 
+                useCORS: true,
                 allowTaint: true,
-                scale: Math.max(3, window.devicePixelRatio || 2),
+                scale: scale,
                 logging: false,
                 width: exportWidth,
                 windowWidth: exportWidth,
-                height: Math.ceil(contentBottomCss + PAD),
+                height: naturalHeightCss,
                 ignoreElements: (element) => {
-                    // 忽略所有遮罩层和overlay
                     return element.classList && (
                         element.classList.contains('tb-editor-overlay') ||
                         element.classList.contains('tb-preview-overlay') ||
@@ -5942,30 +6074,43 @@ function openEditor(mode, idx) {
                         element.classList.contains('tb-popover-overlay')
                     );
                 },
-                onclone: (clonedDoc) => {
+                onclone: (function (naturalH) {
+                    return function (clonedDoc) {
                     var head = clonedDoc.head || clonedDoc.createElement('head');
                     if (!clonedDoc.head && clonedDoc.documentElement) {
                         try { clonedDoc.documentElement.insertBefore(head, clonedDoc.body || clonedDoc.documentElement.firstChild); } catch (e) {}
                     }
+                    var cloneBgSolid = '#1B1B1B';
+                    if (clonedDoc.documentElement) {
+                        clonedDoc.documentElement.style.background = cloneBgSolid;
+                        clonedDoc.documentElement.style.backgroundImage = 'none';
+                    }
+                    if (clonedDoc.body) {
+                        clonedDoc.body.style.background = cloneBgSolid;
+                        clonedDoc.body.style.backgroundImage = 'none';
+                    }
                     if (isFileProtocol) {
                         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) { link.remove(); });
                     }
-                    var blackboardUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
-                    var containerBg = '.tb-card-view { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                    var fallbackUrl = (window.location.origin + window.location.pathname).replace(/\/[^/]*$/, '') + '/assets/bg/bg_blackboard_main.webp';
+                    var exportBgUrl = (typeof bgDataUrl === 'string' && bgDataUrl) ? bgDataUrl : fallbackUrl;
+                    var exportBgUrlCss = exportBgUrl.indexOf('data:') === 0 ? ('url("' + exportBgUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '")') : ('url(' + exportBgUrl + ')');
+                    var containerBg = '.tb-card-view { background-image: ' + exportBgUrlCss + ' !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                    var rootSolid = 'html, body { background: #1B1B1B !important; background-image: none !important; }';
                     var textVisible = '.tb-record-content, .tb-export-content, .tb-record-head, .tb-export-head, .tb-record-index, .tb-export-index, .tb-record-time, .tb-export-time, .tb-card-title, .tb-card-date, .tb-card-footer { color: #EAEAEA !important; -webkit-text-fill-color: #EAEAEA !important; }';
                     var exportFonts = '.tb-card-title { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 32px !important; } .tb-card-date { font-family: "Kalam", "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Caveat", cursive !important; font-size: 16px !important; } .tb-card-footer { font-size: 14px !important; }';
                     var overrideStyle = clonedDoc.createElement('style');
                     overrideStyle.setAttribute('data-export-override', '1');
-                    overrideStyle.textContent = (isFileProtocol ? '* { background-image: none !important; }' : '') + containerBg + textVisible + exportFonts;
+                    overrideStyle.textContent = rootSolid + (isFileProtocol ? '* { background-image: none !important; }' : '') + containerBg + textVisible + exportFonts;
                     head.appendChild(overrideStyle);
                     var clonedContainer = clonedDoc.querySelector('.tb-card-view');
                     if (clonedContainer) {
                         clonedContainer.classList.add('tb-export-mode');
                         var exportModeStyle = clonedDoc.createElement('style');
                         exportModeStyle.setAttribute('data-export-mode', '1');
-                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: url(' + blackboardUrl + ') !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
+                        exportModeStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }\n.tb-export-mode, .tb-export-mode * { filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; mix-blend-mode: normal !important; mask: none !important; -webkit-mask: none !important; background-blend-mode: normal !important; transform: none !important; }\n.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after, .tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after, .tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after, .tb-export-mode .tb-btn::after, .tb-export-mode .tb-empty::before, .tb-export-mode .tb-pin-btn::before, .tb-export-mode .tb-thumb::before { display: none !important; content: none !important; }\n.tb-export-mode { background-image: ' + exportBgUrlCss + ' !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; }';
                         head.appendChild(exportModeStyle);
-                        clonedContainer.style.backgroundImage = 'url(' + blackboardUrl + ')';
+                        clonedContainer.style.backgroundImage = exportBgUrl.indexOf('data:') === 0 ? ('url("' + exportBgUrl.replace(/"/g, '\\"') + '")') : ('url(' + exportBgUrl + ')');
                         clonedContainer.style.backgroundSize = 'cover';
                         clonedContainer.style.backgroundPosition = 'center';
                         clonedContainer.style.backgroundRepeat = 'no-repeat';
@@ -5977,12 +6122,11 @@ function openEditor(mode, idx) {
                         clonedContainer.style.width = exportWidth + 'px';
                         clonedContainer.style.maxWidth = exportWidth + 'px';
                         clonedContainer.style.minWidth = exportWidth + 'px';
+                        clonedContainer.style.height = naturalH + 'px';
+                        clonedContainer.style.minHeight = naturalH + 'px';
                         clonedContainer.style.boxSizing = 'border-box';
-                        var contentH = _contentH || exportContainer.scrollHeight || exportContainer.offsetHeight;
-                        clonedContainer.style.height = contentH + 'px';
-                        clonedContainer.style.minHeight = contentH + 'px';
                         var allImgs = clonedContainer.querySelectorAll('img.todayboard-img');
-                        var maxWidthPx = Math.floor(boardWidth * 0.7);
+                        var maxWidthPx = Math.floor(exportWidth * 0.7);
                         allImgs.forEach(function (img) {
                             img.style.maxWidth = maxWidthPx + 'px';
                             img.style.width = 'auto';
@@ -5995,14 +6139,8 @@ function openEditor(mode, idx) {
                             img.style.margin = '0';
                             img.style.border = '1px dashed rgba(255,255,255,0.35)';
                         });
-                        
                         var imgWrappers = clonedContainer.querySelectorAll('.tb-img-wrapper');
-                        imgWrappers.forEach(function (wrap) {
-                            wrap.style.display = 'block';
-                            wrap.style.width = '100%';
-                            wrap.style.margin = '8px 0 12px 0';
-                        });
-                        
+                        imgWrappers.forEach(function (wrap) { wrap.style.display = 'block'; wrap.style.width = '100%'; wrap.style.margin = '8px 0 12px 0'; });
                         var dividers = clonedContainer.querySelectorAll('.tb-divider');
                         dividers.forEach(function (divider) {
                             divider.style.display = 'block';
@@ -6017,12 +6155,20 @@ function openEditor(mode, idx) {
                             divider.style.background = 'none';
                             divider.style.backgroundImage = 'none';
                         });
+                        var cloneRootBg = clonedDoc.defaultView ? clonedDoc.defaultView.getComputedStyle(clonedContainer).backgroundImage : '';
+                        console.log('[TB-VERIFY] cloneRoot bg =', cloneRootBg);
+                        if (!cloneRootBg || cloneRootBg.indexOf('data:image/') === -1) { console.log('[TB-FAIL] cloneRoot bg is not data url'); }
+                        var verifyPxW = Math.round(exportWidth * scale);
+                        var verifyPxH = Math.round(naturalH * scale);
+                        console.log('[TB-VERIFY] scale=', scale, 'pxW=', verifyPxW, 'pxH=', verifyPxH);
+                        if (verifyPxW > 8000 || verifyPxH > 8000) { console.log('[TB-FAIL] canvas too large'); }
+                        try { dumpExportComputedStyles(clonedContainer, 'clone', clonedDoc.defaultView); } catch (e) { console.warn('[TB-Export-Dump] clone', e); }
                     }
-                }
+                    };
+                })(naturalHeightCss)
             });
-            var finalCanvas = cropCanvasToTarget(canvas, rootCss, targetCss);
-            console.log('[TB-CROP]', 'rootCss=', rootCss, 'targetCss=', targetCss, 'canvasH=', canvas.height, 'finalH=', finalCanvas.height, 'contentBottomCss=', contentBottomCss);
-            var exportedCanvas = finalCanvas;
+            var exportedCanvas = canvas;
+            console.log('[TB-RESULT] direct natural height finalCanvas=' + exportedCanvas.width + ' x ' + exportedCanvas.height);
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
@@ -6037,14 +6183,14 @@ function openEditor(mode, idx) {
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
-            // 恢复默认样式
+            exportContainer.classList.remove('tb-export-natural-height');
             exportContainer.style.width = '';
             exportContainer.style.maxWidth = '';
         } catch (err) {
             alert(err && err.message ? err.message : '生成黑板图片失败，请稍后重试');
             console.error(err);
-            // 确保清理状态
             exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('tb-export-natural-height');
         }
     }
 
@@ -6156,11 +6302,14 @@ function openEditor(mode, idx) {
             return true;
         };
         safe(els.guideConfirmBtn, 'click', confirmGuide, 'guideConfirmBtn');
+        // 首页仅拍照：只调起摄像头，不打开相册/导入；拍好的照片作为新便签
         safe(els.addFooterImageBtn, 'click', () => {
-            // 主界面添加图片：进入编辑新建模式并将图片在编辑界面预览
-            openEditor('new');
-            openAddImageMenu(els.editorAddImageBtn || els.addFooterImageBtn);
+            if (els.cameraInput) {
+                els.cameraInput.value = '';
+                els.cameraInput.click();
+            }
         }, 'addFooterImageBtn');
+        safe(els.cameraInput, 'change', handleCameraPhoto, 'cameraInput');
         safe(els.imageInput, 'change', e => handleSelectedImages(e.target.files), 'imageInput');
         // JSON 文件选择器
         safe(els.jsonInput, 'change', handleJsonFileSelect, 'jsonInput');

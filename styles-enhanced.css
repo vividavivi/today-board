@@ -95,10 +95,13 @@ body::before {
     letter-spacing: 0.3px;
 }
 
-/* 增强输入框粉笔效果 - 半透明底（规则 B），不重复挂黑板图 */
+/* 便签区：红框输入框使用浅色黑板纹理 bg_blackboard_main_lite */
 .tb-editor-input {
-    background-color: rgba(32,32,32,0.5);
-    background-image: none;
+    background-color: rgba(32,32,32,0.6);
+    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     border: 2px dashed rgba(255,255,255,0.2);
     box-shadow: 
         inset 0 4px 8px rgba(0,0,0,0.4),
@@ -697,8 +700,13 @@ body::before {
 }
 
 /* 增强引导界面效果 */
+/* 小框框：与 v2 一致使用浅色黑板纹理，增强边框与阴影 */
 .tb-guide-content {
-    background: linear-gradient(145deg, #2a2a2a, #242424);
+    background-color: rgba(32,32,32,0.85);
+    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     border: 2px dashed rgba(255,255,255,0.3);
     box-shadow: 
         inset 0 4px 8px rgba(0,0,0,0.3),

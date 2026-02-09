@@ -7,7 +7,7 @@
     <link rel="icon" href="./assets/pwa-192.png">
     <link rel="manifest" href="./manifest.webmanifest">
     <meta name="theme-color" content="#1B1B1B">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Today Board">
     <link rel="apple-touch-icon" href="./assets/pwa-192.png">
@@ -135,10 +135,17 @@
             <polyline points="11,7 19,12 11,17" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
+        <button id="addFooterImageBtn" class="tb-btn tb-btn-chalk-white tb-btn-round" data-tooltip="拍照" aria-label="拍照">
+          <svg class="tb-icon tb-icon-camera" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="13" r="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
     </div>
 
     <!-- 隐藏文件输入 -->
     <input id="imageInput" type="file" accept="image/*" multiple style="display:none" />
+    <input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" aria-label="拍照" />
     <input id="jsonInput" type="file" accept=".json,application/json" style="display:none" />
 
     <!-- 多选模式：上层与下层浮动操作栏 -->
@@ -221,7 +228,7 @@
     <script src="./app.js?v=20251230"></script>
     <script>
       if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
-        navigator.serviceWorker.register('/today-board/sw.js').catch(function () {});
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
       }
     </script>
   </body>

@@ -1346,15 +1346,16 @@ body {
 }
 
 /* ========== 引导层样式 ========== */
+/* 大框框：整屏背景用主黑板纹理 */
 .tb-guide-overlay {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: 
-        var(--noise-texture),
-        rgba(27,27,27,0.95);
-    background-size: 200px 200px, 100%;
-    background-repeat: repeat, no-repeat;
+    background-color: var(--bg);
+    background-image: url("./assets/bg/bg_blackboard_main.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     backdrop-filter: blur(8px);
     display: none;
     align-items: center;
@@ -1366,13 +1367,14 @@ body {
     display: flex;
 }
 
+/* 小框框：中央卡片用浅色黑板纹理 */
 .tb-guide-content {
     width: min(90vw, 480px);
-    background: 
-        var(--noise-texture),
-        rgba(38,38,38,0.95);
-    background-size: 200px 200px, 100%;
-    background-repeat: repeat, no-repeat;
+    background-color: rgba(32,32,32,0.85);
+    background-image: url("./assets/bg/bg_blackboard_main_lite.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     border: var(--dashed-border);
     border-radius: 16px;
     padding: 32px 24px;
@@ -1423,6 +1425,12 @@ body {
 
 /* ========== 卡片导出容器样式 ========== */
 /* P0：页面常态仅 body 有黑板；卡片区透明透出 body（规则 A）。导出时 onclone 再注入黑板 */
+/* 导出规则：直接按卡片自然高度截图，不做 contentBottom/裁剪，高度=内容高度 */
+.tb-card-view.tb-export-natural-height {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+}
 .tb-card-view {
     background: transparent;
     color: var(--text);
