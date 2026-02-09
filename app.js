@@ -721,7 +721,26 @@
             await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
             var naturalHeightCss = exportContainer.scrollHeight || exportContainer.offsetHeight;
             naturalHeightCss = Math.max(1, Math.ceil(naturalHeightCss));
-            console.log('[TB-Export] naturalHeightCss=', naturalHeightCss, '（直接按卡片自然高度截图，不裁剪）');
+
+            // 基于 footer（生成时间）计算一个「内容实际高度」用于后裁剪，避免底部大片空黑板
+            var exportCropMetrics = null;
+            try {
+                var footerEl = exportContainer.querySelector('#exportGeneratedAt') || exportContainer.querySelector('.tb-card-footer');
+                if (footerEl) {
+                    var padCss = 24;
+                    var footerBottomCss = footerEl.offsetTop + footerEl.offsetHeight;
+                    var targetCssHeight = Math.min(naturalHeightCss, footerBottomCss + padCss);
+                    exportCropMetrics = {
+                        rootScrollHeightCss: naturalHeightCss,
+                        targetCssHeight: targetCssHeight
+                    };
+                    console.log('[TB-Export-Metrics]', exportCropMetrics);
+                }
+            } catch (e) {
+                console.warn('[TB-Export-Metrics] compute failed', e);
+            }
+
+            console.log('[TB-Export] naturalHeightCss=', naturalHeightCss, '（直接按卡片自然高度截图，之后按 footer 精剪底部空白）');
 
             // P0修复：背景图转为 data URL 再绘制；file:// 下强制纯色，避免画布被污染导致 toDataURL 报错
             const isFileProtocol = window.location.protocol === 'file:';
@@ -860,8 +879,19 @@
                     };
                 })(naturalHeightCss)
             });
+
+            // 若已记录 footer 位置，则在 canvas 层按 footer+24px 精准裁高，去掉多余黑板留白
             var exportedCanvas = canvas;
-            console.log('[TB-RESULT] direct natural height finalCanvas=' + exportedCanvas.width + ' x ' + exportedCanvas.height);
+            try {
+                if (exportCropMetrics && typeof cropCanvasByFooter === 'function') {
+                    exportedCanvas = cropCanvasByFooter(canvas, exportCropMetrics) || canvas;
+                }
+            } catch (e) {
+                console.warn('[TB-Export-Crop] cropCanvasByFooter failed, use original canvas', e);
+                exportedCanvas = canvas;
+            }
+
+            console.log('[TB-RESULT] finalCanvas=' + exportedCanvas.width + ' x ' + exportedCanvas.height);
             let dataUrl;
             try {
                 dataUrl = exportedCanvas.toDataURL('image/png');
@@ -4676,8 +4706,13 @@ function openEditor(mode, idx) {
 
     /* ---------- 拍照便签：主界面拍照后直接作为新便签 ---------- */
     async function handleCameraPhoto(ev) {
+        // #region agent log
         const input = ev && ev.target;
         const fileList = input && input.files;
+        const captureAttr = input ? input.getAttribute('capture') : null;
+        const isCameraInput = input && input.id === 'cameraInput';
+        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:handleCameraPhoto',message:'cameraInput change fired',data:{fileCount:fileList?fileList.length:0,inputId:input?input.id:null,captureAttr:captureAttr,isCameraInput:isCameraInput,accept:input?input.accept:null},timestamp:Date.now(),hypothesisId:'H4'})}).catch(function(){});
+        // #endregion
         if (!fileList || fileList.length === 0) {
             if (els.cameraInput) els.cameraInput.value = '';
             return;
@@ -4718,6 +4753,9 @@ function openEditor(mode, idx) {
 
     /* ---------- 图片选择（v1规范：统一源图原则） ---------- */
     async function handleSelectedImages(fileList) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:handleSelectedImages',message:'imageInput change fired (gallery/import)',data:{fileCount:fileList?fileList.length:0},timestamp:Date.now(),hypothesisId:'H4'})}).catch(function(){});
+        // #endregion
         if (!fileList || fileList.length === 0) {
             if (els.imagePreview) els.imagePreview.innerHTML = '';
             return;
@@ -4857,6 +4895,9 @@ function openEditor(mode, idx) {
     }
 
     function openGalleryPicker() {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:openGalleryPicker',message:'openGalleryPicker called (will trigger imageInput)',data:{},timestamp:Date.now(),hypothesisId:'H3-H4'})}).catch(function(){});
+        // #endregion
         if (!els.imageInput) return;
         try {
             els.imageInput.removeAttribute('capture');
@@ -4958,6 +4999,9 @@ function openEditor(mode, idx) {
     }
 
     async function openAddImageMenu(anchorEl) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:openAddImageMenu',message:'openAddImageMenu called',data:{anchorId:anchorEl?anchorEl.id:null,isFooterBtn:!!(anchorEl&&els.addFooterImageBtn&&anchorEl===els.addFooterImageBtn)},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
+        // #endregion
         if (!anchorEl) return;
         // 背景遮罩用于点击空白处关闭
         const overlay = document.createElement('div');
@@ -6302,12 +6346,33 @@ function openEditor(mode, idx) {
             return true;
         };
         safe(els.guideConfirmBtn, 'click', confirmGuide, 'guideConfirmBtn');
-        // 首页仅拍照：只调起摄像头，不打开相册/导入；拍好的照片作为新便签
-        safe(els.addFooterImageBtn, 'click', () => {
-            if (els.cameraInput) {
-                els.cameraInput.value = '';
-                els.cameraInput.click();
+        // #region agent log
+        (function () {
+            var hasFooter = !!els.addFooterImageBtn; var hasCamera = !!els.cameraInput; var id = (els.addFooterImageBtn && els.addFooterImageBtn.id) || 'none';
+            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:bind-footer',message:'init addFooterImageBtn and cameraInput',data:{addFooterImageBtnExists:hasFooter,cameraInputExists:hasCamera,footerId:id},timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+        })();
+        // #endregion
+        // 首页仅拍照：只调起 cameraInput（摄像头），绝不触发 imageInput（相册）
+        safe(els.addFooterImageBtn, 'click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (!els.cameraInput) {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:addFooterImageBtn-click',message:'footer image btn clicked but cameraInput missing',data:{cameraInputExists:false},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(function(){});
+                // #endregion
+                return;
             }
+            els.cameraInput.value = '';
+            els.cameraInput.setAttribute('capture', 'environment');
+            els.cameraInput.removeAttribute('multiple');
+            els.cameraInput.accept = 'image/*';
+            const captureBefore = els.cameraInput.getAttribute('capture');
+            const acceptBefore = els.cameraInput.accept;
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:addFooterImageBtn-click',message:'footer image btn clicked, triggering cameraInput',data:{cameraInputExists:true,captureAttr:captureBefore,accept:acceptBefore,hasMultiple:els.cameraInput.hasAttribute('multiple')},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(function(){});
+            // #endregion
+            els.cameraInput.click();
         }, 'addFooterImageBtn');
         safe(els.cameraInput, 'change', handleCameraPhoto, 'cameraInput');
         safe(els.imageInput, 'change', e => handleSelectedImages(e.target.files), 'imageInput');

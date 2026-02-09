@@ -1133,9 +1133,9 @@ body {
 
 .tb-preview-dialog {
     width: 100%;
-    max-width: 600px;
+    max-width: 640px;
     max-height: 85vh;
-    background: 
+    background:
         var(--noise-texture),
         rgba(32,32,32,0.9);
     background-size: 200px 200px, 100%;
@@ -1145,6 +1145,7 @@ body {
     padding: 20px;
     display: flex;
     flex-direction: column;
+    /* 允许内容在高度不足时滚动，避免按钮被裁掉 */
     overflow-y: auto;
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     /* P0：导出预览禁止用 transform/zoom 缩放内容 */
@@ -1154,9 +1155,11 @@ body {
 
 /* P0：预览图片样式（禁止缩放） */
 .tb-preview-image {
+    display: block;
     width: 100%;
     height: auto;
     max-width: 100%;
+    /* 在预览对话框内占据主要高度，但为按钮预留空间 */
     max-height: 70vh;
     object-fit: contain;
     border-radius: 8px;
