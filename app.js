@@ -15,9 +15,9 @@
     };
     const APP_VERSION = 'v0.2';
     const BUILD_DATE = '2025.12.31'; // P0修复：Build 日期常量
-    // 导出图片：固定宽度 & 底部留白
-    const EXPORT_WIDTH = 390; // 导出 PNG 固定宽度（px）
-    const EXPORT_BOTTOM_PADDING = 20; // 生成时间下方额外留白（px）
+    // 导出图片规则｜最终统一版：基准宽度 1170px，scale 2/3，最终宽度≥2340px
+    const EXPORT_WIDTH = 1170; // 导出 PNG 基准宽度（px）
+    const EXPORT_BOTTOM_PADDING = 20; // 底部最大留白 ≤20px
     // 导出裁剪：记录 clone 中的 footer 位置与整体高度，供 canvas 裁剪使用
     let lastExportCloneMetrics = null;
     // v1规范：功能开关
@@ -710,7 +710,32 @@
                     }
                 });
             })(cardText);
-            
+
+            // === 新版导出逻辑：直接简单截图 cardView，废弃旧的高度/裁剪规则 ===
+            exportContainer.classList.remove('visually-hidden');
+            // P0：添加 is-exporting class 以启用导出态图片样式规则
+            exportContainer.classList.add('is-exporting');
+            const simpleCanvas = await renderCardCanvasSimple(exportContainer);
+            console.log('[TB-RESULT] finalCanvas=' + simpleCanvas.width + ' x ' + simpleCanvas.height);
+            let dataUrl;
+            try {
+                dataUrl = simpleCanvas.toDataURL('image/png');
+            } catch (e) {
+                if (e.name === 'SecurityError' || (e.message && e.message.includes('tainted'))) {
+                    throw new Error('导出失败：图片包含跨域内容，请确保所有图片来自本应用');
+                }
+                throw e;
+            }
+            const filename = generateTBFileName('png');
+            showCardPreview(dataUrl, filename, { width: simpleCanvas.width, height: simpleCanvas.height });
+            exportContainer.classList.add('visually-hidden');
+            exportContainer.classList.remove('export-mode');
+            exportContainer.classList.remove('is-exporting');
+            exportContainer.classList.remove('tb-export-natural-height');
+            exportContainer.style.width = '';
+            exportContainer.style.maxWidth = '';
+            return;
+
             await ensureHtml2Canvas();
             exportContainer.classList.remove('visually-hidden');
             exportContainer.classList.add('export-mode');
@@ -761,6 +786,13 @@
             var pxW = Math.round(exportWidth * scale);
             var pxH = Math.round(naturalHeightCss * scale);
             console.log('[TB-Export-Scale] scale=', scale, 'pxW=', pxW, 'pxH=', pxH);
+
+            try {
+                var diagnostic = getExportCompositeDiagnostic(exportContainer);
+                console.log('[TB-Export-Composite] root及祖先:', diagnostic.ancestors, '子树非默认:', diagnostic.subtree);
+            } catch (e) {
+                console.warn('[TB-Export-Composite] 诊断失败', e);
+            }
 
             const canvas = await html2canvas(exportContainer, { 
                 backgroundColor: null,
@@ -892,17 +924,18 @@
             }
 
             console.log('[TB-RESULT] finalCanvas=' + exportedCanvas.width + ' x ' + exportedCanvas.height);
-            let dataUrl;
+            // 注意：此分支已不再走正常流程，仅保留作为兼容备用逻辑，避免与前面的 dataUrl 重复声明
+            var legacyDataUrl;
             try {
-                dataUrl = exportedCanvas.toDataURL('image/png');
+                legacyDataUrl = exportedCanvas.toDataURL('image/png');
             } catch (e) {
                 if (e.name === 'SecurityError' || (e.message && e.message.includes('tainted'))) {
                     throw new Error('导出失败：图片包含跨域内容，请确保所有图片来自本应用');
                 }
                 throw e;
             }
-            const filename = generateTBFileName('png');
-            showCardPreview(dataUrl, filename, { width: exportedCanvas.width, height: exportedCanvas.height });
+            const legacyFilename = generateTBFileName('png');
+            showCardPreview(legacyDataUrl, legacyFilename, { width: exportedCanvas.width, height: exportedCanvas.height });
             exportContainer.classList.add('visually-hidden');
             exportContainer.classList.remove('export-mode');
             exportContainer.classList.remove('is-exporting');
@@ -5139,6 +5172,263 @@ function openEditor(mode, idx) {
             });
         }));
     }
+    // 新版导出：遵循《导出图片规则｜最终统一版》- 基准1170px、scale 2/3、高度以内容为准、黑板 data URL、便签图 width 100% height auto
+    async function renderCardCanvasSimple(exportContainer) {
+        if (!exportContainer) throw new Error('导出容器不存在');
+        await ensureHtml2Canvas();
+        await waitForImages(exportContainer);
+        // 等两帧，确保布局/字体/图片稳定
+        await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+        // 优先使用调用方已设置的宽度（如 generateTodayCard 的 getBoardContentWidth），适应手机宽度
+        var callerWidth = (exportContainer.style && exportContainer.style.width) ? parseInt(exportContainer.style.width, 10) : 0;
+        var exportWidth = (callerWidth > 0 && callerWidth <= 2000) ? callerWidth : EXPORT_WIDTH;
+        // 综合版本：添加 tb-export-natural-height 让容器高度由内容撑开，避免父级 min-height 造成多余空白
+        exportContainer.classList.add('tb-export-natural-height');
+        // 导出前将容器设为 exportWidth，以正确测量内容高度与 footer 位置
+        exportContainer.style.width = exportWidth + 'px';
+        exportContainer.style.maxWidth = exportWidth + 'px';
+        exportContainer.style.minWidth = exportWidth + 'px';
+        await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+        // 658c934 (19:02) 正确高度版本：测量前临时加 tb-export-mode 样式，确保容器按内容撑开
+        exportContainer.classList.add('tb-export-mode');
+        var exportModeMeasureStyle = document.createElement('style');
+        exportModeMeasureStyle.setAttribute('data-export-mode-measure', '1');
+        exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
+        document.head.appendChild(exportModeMeasureStyle);
+        var contentBottomCss = getVisibleContentBottom(exportContainer);
+        var PAD = 32;
+        var targetCssHeight = contentBottomCss + PAD;
+        exportContainer.classList.remove('tb-export-mode');
+        exportModeMeasureStyle.remove();
+        var naturalHeightCss = targetCssHeight;
+        var exportCropMetrics = { rootScrollHeightCss: naturalHeightCss, targetCssHeight: targetCssHeight };
+        console.log('[TB-Export-Metrics] contentBottomCss=' + contentBottomCss + ' targetCssHeight=' + targetCssHeight + ' naturalHeightCss=' + naturalHeightCss);
+        // #region agent log
+        try {
+            var footerEl = exportContainer.querySelector('#exportGeneratedAt, .tb-card-footer');
+            var footerBottom = footerEl ? footerEl.getBoundingClientRect().bottom - exportContainer.getBoundingClientRect().top : 0;
+            var expectedFullH = contentBottomCss + 24 + 2;
+            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:renderCardCanvasSimple','message':'height calc H2',data:{contentBottomCss:contentBottomCss,PAD:32,targetCssHeight:targetCssHeight,naturalHeightCss:naturalHeightCss,footerBottom:footerBottom,expectedFullH:expectedFullH},timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){});
+        } catch (e) {}
+        // #endregion
+        var scale = Math.min(3, Math.max(2, Math.round(window.devicePixelRatio || 2)));
+
+        // 预先获取一张 live 样本图片的关键样式，用于 clone 对比日志
+        var liveImgMetrics = null;
+        try {
+            var liveImg = exportContainer.querySelector('img.todayboard-img');
+            if (liveImg && window.getComputedStyle) {
+                var liveCs = window.getComputedStyle(liveImg);
+                liveImgMetrics = {
+                    width: liveImg.offsetWidth,
+                    height: liveImg.offsetHeight,
+                    objectFit: liveCs.objectFit,
+                    borderRadius: liveCs.borderRadius,
+                    overflow: liveCs.overflow,
+                    padding: liveCs.paddingTop + ' ' + liveCs.paddingRight + ' ' + liveCs.paddingBottom + ' ' + liveCs.paddingLeft,
+                    margin: liveCs.marginTop + ' ' + liveCs.marginRight + ' ' + liveCs.marginBottom + ' ' + liveCs.marginLeft,
+                    boxShadow: liveCs.boxShadow
+                };
+            }
+        } catch (e) {
+            console.warn('[TB-IMG-VERIFY] capture live metrics failed', e);
+        }
+
+        // 准备黑板背景 dataURL（优先）用于 clone 中注入
+        var isFileProtocol = window.location.protocol === 'file:';
+        var bgImageAbsoluteUrl = new URL('./assets/bg/bg_blackboard_main.webp', window.location.href).href;
+        var bgDataUrl = null;
+        try {
+            bgDataUrl = await imageUrlToDataUrl(bgImageAbsoluteUrl);
+        } catch (e) {
+            console.error('导出背景图转 data URL 失败，导出终止（规则禁止纯色背景）', { url: bgImageAbsoluteUrl, message: e && e.message, exception: e });
+            throw new Error('导出背景图 bg_blackboard_main.webp 无法转为 data URL，请使用 http(s) 协议打开页面后重试');
+        }
+
+        // 诊断：列出导出目标及祖先上的合成属性
+        try {
+            var diagnostic = getExportCompositeDiagnostic(exportContainer);
+            console.log('[TB-Export-Composite] root及祖先:', diagnostic.ancestors, '子树非默认:', diagnostic.subtree);
+        } catch (e) {
+            console.warn('[TB-Export-Composite] 诊断失败', e);
+        }
+
+        var canvas = await html2canvas(exportContainer, {
+            backgroundColor: null,
+            useCORS: true,
+            allowTaint: true,
+            scale: scale,
+            logging: false,
+            width: exportWidth,
+            windowWidth: exportWidth,
+            height: naturalHeightCss,
+            ignoreElements: (element) => {
+                return element.classList && (
+                    element.classList.contains('tb-editor-overlay') ||
+                    element.classList.contains('tb-preview-overlay') ||
+                    element.classList.contains('tb-confirm-overlay') ||
+                    element.classList.contains('tb-guide-overlay') ||
+                    element.classList.contains('tb-popover-overlay')
+                );
+            },
+            onclone: (clonedDoc) => {
+                try {
+                    var head = clonedDoc.head || clonedDoc.createElement('head');
+                    if (!clonedDoc.head && clonedDoc.documentElement) {
+                        try { clonedDoc.documentElement.insertBefore(head, clonedDoc.body || clonedDoc.documentElement.firstChild); } catch (e) {}
+                    }
+                    var clonedContainer = clonedDoc.querySelector('.tb-card-view');
+                    if (!clonedContainer) return;
+
+                    var win = clonedDoc.defaultView || clonedDoc.parentWindow;
+
+                    // 去掉顶部白色：document 背景设为黑板色
+                    var docEl = clonedDoc.documentElement;
+                    if (docEl) {
+                        docEl.style.background = '#1B1B1B';
+                        docEl.style.backgroundImage = 'none';
+                    }
+                    if (clonedDoc.body) {
+                        clonedDoc.body.style.background = '#1B1B1B';
+                        clonedDoc.body.style.backgroundImage = 'none';
+                    }
+
+                    // P0：确保克隆容器有 is-exporting class，以启用导出态图片样式规则
+                    clonedContainer.classList.add('is-exporting');
+
+                    // A) 背景：必须使用 data URL，禁止纯色
+                    var exportBgUrl = (typeof bgDataUrl === 'string' && bgDataUrl.indexOf('data:') === 0)
+                        ? bgDataUrl
+                        : null;
+                    if (!exportBgUrl) {
+                        throw new Error('导出背景必须为 data URL，当前 bgDataUrl 无效');
+                    }
+                    var safeUrl = exportBgUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    clonedContainer.style.backgroundImage = 'url("' + safeUrl + '")';
+                    clonedContainer.style.backgroundSize = 'cover';
+                    clonedContainer.style.backgroundPosition = 'center';
+                    clonedContainer.style.backgroundRepeat = 'no-repeat';
+
+                    var bgComputed = (win && win.getComputedStyle) ? win.getComputedStyle(clonedContainer).backgroundImage : '';
+                    console.log('[TB-VERIFY-BG] cloneRoot bg=', bgComputed);
+                    if (bgComputed.indexOf('data:image') !== -1) {
+                        console.log('[TB-VERIFY-BG] ✓ 使用 dataURL 黑板背景');
+                    } else {
+                        console.error('[TB-VERIFY-BG] FAIL 背景非 data URL，导出不合格');
+                    }
+
+                    // B) 导出态：遵循改变高度前规则，强制 clone 固定宽度 EXPORT_WIDTH、高度 naturalHeightCss
+                    clonedContainer.classList.add('tb-export-mode');
+                    clonedContainer.style.width = exportWidth + 'px';
+                    clonedContainer.style.maxWidth = exportWidth + 'px';
+                    clonedContainer.style.minWidth = exportWidth + 'px';
+                    clonedContainer.style.height = naturalHeightCss + 'px';
+                    clonedContainer.style.minHeight = naturalHeightCss + 'px';
+                    clonedContainer.style.boxSizing = 'border-box';
+                    clonedContainer.style.margin = '0';
+                    clonedContainer.style.outline = 'none';
+                    clonedContainer.style.boxShadow = 'none';
+                    // #region agent log
+                    try {
+                        var cloneCs = win && win.getComputedStyle ? win.getComputedStyle(clonedContainer) : null;
+                        var logData = {
+                            hasIsExporting: clonedContainer.classList.contains('is-exporting'),
+                            borderTop: cloneCs ? cloneCs.borderTop : 'n/a',
+                            borderRight: cloneCs ? cloneCs.borderRight : 'n/a',
+                            borderBottom: cloneCs ? cloneCs.borderBottom : 'n/a',
+                            borderLeft: cloneCs ? cloneCs.borderLeft : 'n/a',
+                            boxShadow: cloneCs ? cloneCs.boxShadow : 'n/a',
+                            outline: cloneCs ? cloneCs.outline : 'n/a',
+                            naturalHeightCss: naturalHeightCss,
+                            contentBottomCss: contentBottomCss,
+                            PAD: 32
+                        };
+                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:onclone','message':'clone border/computed',data:logData,timestamp:Date.now(),hypothesisId:'H3,H4,H5'})}).catch(function(){});
+                    } catch (e) {}
+                    // #endregion
+                    var exportModeStyle = clonedDoc.createElement('style');
+                    exportModeStyle.setAttribute('data-export-mode', '1');
+                    exportModeStyle.textContent =
+                        '.tb-export-mode, .tb-export-mode * {' +
+                            'filter: none !important;' +
+                            'backdrop-filter: none !important;' +
+                            '-webkit-backdrop-filter: none !important;' +
+                            'mix-blend-mode: normal !important;' +
+                            'mask: none !important;' +
+                            '-webkit-mask: none !important;' +
+                            'background-blend-mode: normal !important;' +
+                            'transform: none !important;' +
+                        '}' +
+                        '.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after,' +
+                        '.tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after,' +
+                        '.tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after,' +
+                        '.tb-export-mode .tb-btn::after,' +
+                        '.tb-export-mode .tb-empty::before,' +
+                        '.tb-export-mode .tb-pin-btn::before,' +
+                        '.tb-export-mode .tb-thumb::before {' +
+                            'display: none !important;' +
+                            'content: none !important;' +
+                        '}';
+                    head.appendChild(exportModeStyle);
+
+                    // B2) 便签图片：不覆盖样式，100% 复用页面态布局（max-width:70% / width:auto / height:auto 来自 styles-v2.css）
+                    // 禁止在 clone 中重新计算图片尺寸，导出 = 高分辨率截图
+
+                    // C) 记录 live vs clone 的图片关键样式对比日志
+                    try {
+                        var cloneImg = clonedContainer.querySelector('img.todayboard-img');
+                        if (cloneImg && win && win.getComputedStyle) {
+                            var cloneCs = win.getComputedStyle(cloneImg);
+                            var cloneImgMetrics = {
+                                width: cloneImg.offsetWidth,
+                                height: cloneImg.offsetHeight,
+                                objectFit: cloneCs.objectFit,
+                                borderRadius: cloneCs.borderRadius,
+                                overflow: cloneCs.overflow,
+                                padding: cloneCs.paddingTop + ' ' + cloneCs.paddingRight + ' ' + cloneCs.paddingBottom + ' ' + cloneCs.paddingLeft,
+                                margin: cloneCs.marginTop + ' ' + cloneCs.marginRight + ' ' + cloneCs.marginBottom + ' ' + cloneCs.marginLeft,
+                                boxShadow: cloneCs.boxShadow
+                            };
+                            // 同时记录 wrapper 的样式
+                            var cloneWrapper = cloneImg.closest('.tb-img-wrapper');
+                            var cloneWrapperMetrics = null;
+                            if (cloneWrapper && win.getComputedStyle) {
+                                var wrapperCs = win.getComputedStyle(cloneWrapper);
+                                cloneWrapperMetrics = {
+                                    width: cloneWrapper.offsetWidth,
+                                    padding: wrapperCs.paddingTop + ' ' + wrapperCs.paddingRight + ' ' + wrapperCs.paddingBottom + ' ' + wrapperCs.paddingLeft,
+                                    margin: wrapperCs.marginTop + ' ' + wrapperCs.marginRight + ' ' + wrapperCs.marginBottom + ' ' + wrapperCs.marginLeft,
+                                    overflow: wrapperCs.overflow,
+                                    borderRadius: wrapperCs.borderRadius
+                                };
+                            }
+                            console.log('[TB-IMG-VERIFY]', { 
+                                liveImg: liveImgMetrics, 
+                                cloneImg: cloneImgMetrics,
+                                cloneWrapper: cloneWrapperMetrics
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('[TB-IMG-VERIFY] capture clone metrics failed', e);
+                    }
+                } catch (e) {
+                    console.error('[TB-EXPORT-ONCLONE] failed', e);
+                    // 抛出错误让 html2canvas 失败，从而在外层被捕获并反馈给用户
+                    throw e;
+                }
+            }
+        });
+        // 按 footer+24px 裁高，去掉底部大片空白（与旧版一致）
+        var exportedCanvas = canvas;
+        try {
+            if (exportCropMetrics && typeof cropCanvasByFooter === 'function') {
+                exportedCanvas = cropCanvasByFooter(canvas, exportCropMetrics) || canvas;
+            }
+        } catch (e) {
+            console.warn('[TB-Export-Crop] cropCanvasByFooter failed, use original canvas', e);
+        }
+        return exportedCanvas;
+    }
     // 判断 CSS background-image 是否为会 taint 画布的位图 url（.webp/.png/.jpg/.jpeg），data: 与渐变保留
     function isTaintingBackgroundValue(bgImageValue) {
         if (!bgImageValue || typeof bgImageValue !== 'string') return false;
@@ -5386,40 +5676,43 @@ function openEditor(mode, idx) {
         return { ancestors: ancestors, subtree: subtree };
     }
     /**
-     * 固定内容底部锚点，不再用 maxEl 猜。优先：最后一条 .tb-export-record/.tb-record；若无：footer(#exportGeneratedAt/.tb-card-footer)；最后：root.scrollHeight。
+     * 导出高度规则：以最后一个内容元素（含 footer/生成时间）的 getBoundingClientRect().bottom 为准。
+     * 禁止 scrollHeight/offsetHeight/100vh，只使用 getBoundingClientRect。
      */
     function getVisibleContentBottom(root) {
         var rootRect = root.getBoundingClientRect();
         var rootTop = rootRect.top;
-        var used = 'scrollHeight';
+        var used = 'none';
         var bottom = 0;
-        var recordIndex = -1;
-        var records = root.querySelectorAll('.tb-export-record, .tb-record');
-        if (records.length > 0) {
-            var lastRecord = records[records.length - 1];
-            var r = lastRecord.getBoundingClientRect();
-            if (r.height >= 2) {
-                bottom = r.bottom - rootTop;
-                used = 'record';
-                recordIndex = records.length - 1;
+        var footer = root.querySelector('#exportGeneratedAt, .tb-card-footer');
+        if (footer) {
+            var fr = footer.getBoundingClientRect();
+            if (fr.height >= 2) {
+                bottom = fr.bottom - rootTop;
+                used = 'footer';
             }
         }
-        if (used !== 'record') {
-            var footer = root.querySelector('#exportGeneratedAt, .tb-card-footer');
-            if (footer) {
-                var fr = footer.getBoundingClientRect();
-                if (fr.height >= 2) {
-                    bottom = fr.bottom - rootTop;
-                    used = 'footer';
+        if (used !== 'footer') {
+            var records = root.querySelectorAll('.tb-export-record, .tb-record');
+            if (records.length > 0) {
+                var lastRecord = records[records.length - 1];
+                var r = lastRecord.getBoundingClientRect();
+                if (r.height >= 2) {
+                    bottom = r.bottom - rootTop;
+                    used = 'record';
                 }
             }
         }
-        if (used === 'scrollHeight' || bottom <= 0) {
-            bottom = root.scrollHeight || root.offsetHeight || 0;
-            used = 'scrollHeight';
+        if (bottom <= 0) {
+            var children = root.children || [];
+            for (var i = 0; i < children.length; i++) {
+                var cr = children[i].getBoundingClientRect();
+                var b = cr.bottom - rootTop;
+                if (b > bottom) { bottom = b; used = 'lastChild'; }
+            }
         }
-        var contentBottomCss = Math.ceil(bottom);
-        console.log('[TB-ANCHOR] used=' + used + ' bottom=' + bottom + ' rootTop=' + rootTop + ' contentBottomCss=' + contentBottomCss + (recordIndex >= 0 ? ' recordIndex=' + recordIndex : ''));
+        var contentBottomCss = Math.max(1, Math.ceil(bottom));
+        console.log('[TB-ANCHOR] used=' + used + ' bottom=' + bottom + ' rootTop=' + rootTop + ' contentBottomCss=' + contentBottomCss);
         return contentBottomCss;
     }
     var CROP_PAD = 24;
@@ -5497,6 +5790,9 @@ function openEditor(mode, idx) {
                 targetCanvasHeight
             };
             console.log('[TB-Export-Crop]', cropDebug);
+            // #region agent log
+            try { fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:cropCanvasByFooter','message':'crop H2',data:cropDebug,timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){}); } catch (e) {}
+            // #endregion
 
             // 若等于原高度，直接返回（说明 DOM 本身就只到 footer+20）
             if (targetCanvasHeight === canvasHeight) return canvas;
@@ -5753,7 +6049,36 @@ function openEditor(mode, idx) {
                     }
                 });
             })(cardText);
+
+            // 新版导出路径：直接复用简单截图 helper，废弃下面旧的复杂规则
+            // 1）设置卡片宽度与黑板内容区一致
+            const simpleBoardWidth = getBoardContentWidth();
+            exportContainer.style.width = `${simpleBoardWidth}px`;
+            exportContainer.style.maxWidth = `${simpleBoardWidth}px`;
+
+            // 2）显示导出容器并截图
+            exportContainer.classList.remove('visually-hidden');
+            // P0：添加 is-exporting class 以启用导出态图片样式规则
+            exportContainer.classList.add('is-exporting');
+            let simpleCanvas;
+            try {
+                simpleCanvas = await renderCardCanvasSimple(exportContainer);
+                console.log('[TB-RESULT] finalCanvas=' + simpleCanvas.width + ' x ' + simpleCanvas.height);
+                const dataUrl = simpleCanvas.toDataURL('image/png');
+                const filename = generateTBFileName('png');
+                showCardPreview(dataUrl, filename, { width: simpleCanvas.width, height: simpleCanvas.height });
+            } finally {
+                // 3）无论成功失败都恢复 DOM 状态
+                exportContainer.classList.add('visually-hidden');
+                exportContainer.classList.remove('export-mode');
+                exportContainer.classList.remove('is-exporting');
+                exportContainer.classList.remove('tb-export-natural-height');
+                exportContainer.style.width = '';
+                exportContainer.style.maxWidth = '';
+            }
+            return;
             
+            // ===== 下面是旧的导出实现，已不再走到，仅保留作备用 =====
             // P0修复：确保 html2canvas 库已加载
             try {
                 await ensureHtml2Canvas();
@@ -5798,6 +6123,14 @@ function openEditor(mode, idx) {
             var MAX_PX = 8000;
             scale = Math.min(scale, MAX_PX / exportWidth, MAX_PX / naturalHeightCss);
             console.log('[TB-Export-Scale] scale=', scale, 'naturalHeightCss=', naturalHeightCss);
+
+            // 诊断：列出导出目标及祖先上的合成属性
+            try {
+                var diagnostic = getExportCompositeDiagnostic(exportContainer);
+                console.log('[TB-Export-Composite] root及祖先:', diagnostic.ancestors, '子树非默认:', diagnostic.subtree);
+            } catch (e) {
+                console.warn('[TB-Export-Composite] 诊断失败', e);
+            }
 
             const canvas = await html2canvas(exportContainer, {
                 backgroundColor: null,
@@ -6099,6 +6432,14 @@ function openEditor(mode, idx) {
             var MAX_PX = 8000;
             scale = Math.min(scale, MAX_PX / exportWidth, MAX_PX / naturalHeightCss);
             console.log('[TB-Export-Scale] scale=', scale, 'naturalHeightCss=', naturalHeightCss);
+
+            // 诊断：列出导出目标及祖先上的合成属性
+            try {
+                var diagnostic = getExportCompositeDiagnostic(exportContainer);
+                console.log('[TB-Export-Composite] root及祖先:', diagnostic.ancestors, '子树非默认:', diagnostic.subtree);
+            } catch (e) {
+                console.warn('[TB-Export-Composite] 诊断失败', e);
+            }
 
             const canvas = await html2canvas(exportContainer, {
                 backgroundColor: null,

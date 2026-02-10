@@ -1434,12 +1434,35 @@ body {
     height: auto !important;
     max-height: none !important;
 }
+
+/* 导出态：四周加粗虚线框（单层），顶/左/右/底均为 2px 粗虚线 */
+.tb-card-view.is-exporting {
+    padding-top: 12px !important;
+    padding-bottom: 24px !important;
+    border: none !important;
+    border-top: 2px dashed rgba(255,255,255,0.6) !important;
+    border-right: 2px dashed rgba(255,255,255,0.6) !important;
+    border-bottom: 2px dashed rgba(255,255,255,0.6) !important;
+    border-left: 2px dashed rgba(255,255,255,0.6) !important;
+    outline: none !important;
+}
+/* 顶部仅 card-view 粗虚线外框，header 下方细分隔线保留 */
+.tb-card-view.is-exporting .tb-card-header {
+    border-top: none !important;
+}
+/* footer 仅保留 content 分隔线，底部粗框由 card-view 统一绘制 */
+.tb-card-view.is-exporting .tb-card-footer {
+    padding-bottom: 20px !important;
+    border-top: var(--dashed-border) !important;
+    border-bottom: none !important;
+}
 .tb-card-view {
     background: transparent;
     color: var(--text);
     padding: 24px;
     margin: 0 auto;
-    min-height: 100vh;
+    /* 新版导出：卡片高度由内容撑开，不再强制 100vh */
+    min-height: 0;
     border: var(--dashed-border);
     box-shadow: 0 0 10px rgba(255,255,255,0.05);
     /* P0：导出预览禁止用 transform/zoom 缩放内容 */
@@ -1470,16 +1493,32 @@ body {
     background-repeat: no-repeat !important;
 }
 
-/* 导出态禁用所有透明度叠加（防止变暗） */
+/* 导出态禁用所有透明度叠加（防止变暗），含标签时间 tb-export-time */
 .tb-card-view.is-exporting .tb-record,
+.tb-card-view.is-exporting .tb-export-record,
+.tb-card-view.is-exporting .tb-record-head,
+.tb-card-view.is-exporting .tb-export-head,
+.tb-card-view.is-exporting .tb-record-index,
+.tb-card-view.is-exporting .tb-export-index,
+.tb-card-view.is-exporting .tb-record-time,
+.tb-card-view.is-exporting .tb-export-time,
 .tb-card-view.is-exporting .tb-record-content,
-.tb-card-view.is-exporting .tb-card-content {
+.tb-card-view.is-exporting .tb-export-content,
+.tb-card-view.is-exporting .tb-card-content,
+.tb-card-view.is-exporting .tb-card-footer {
     opacity: 1 !important;
+}
+
+/* 导出态确保标签时间可见（避免被 muted 色弱化） */
+.tb-card-view.is-exporting .tb-record-time,
+.tb-card-view.is-exporting .tb-export-time {
+    color: var(--text) !important;
 }
 
 /* 导出态禁用所有 box-shadow 叠加（防止变暗） */
 .tb-card-view.is-exporting,
-.tb-card-view.is-exporting .tb-record {
+.tb-card-view.is-exporting .tb-record,
+.tb-card-view.is-exporting .tb-export-record {
     box-shadow: none !important;
 }
 
@@ -1488,8 +1527,11 @@ body {
 /* 注意：width、max-width、padding、font-size 等布局属性由正常样式控制，不在 is-exporting 下覆盖 */
 
 /* P0：导出态保护图片样式，确保与黑板一致（max-width: 70%） */
+/* 注：cardView 使用 tb-export-content，主记录区用 tb-record-content，两者需一致 */
 .tb-card-view.is-exporting .tb-card-content .tb-record-content img.todayboard-img,
-.tb-card-view.is-exporting .tb-record-content img.todayboard-img {
+.tb-card-view.is-exporting .tb-card-content .tb-export-content img.todayboard-img,
+.tb-card-view.is-exporting .tb-record-content img.todayboard-img,
+.tb-card-view.is-exporting .tb-export-content img.todayboard-img {
     /* 确保导出时图片样式与黑板完全一致，不被覆盖 */
     max-width: 70% !important;
     width: auto !important;
@@ -1499,7 +1541,8 @@ body {
     display: inline-block !important;
     vertical-align: middle !important;
     border-radius: 8px !important;
-    border: var(--dashed-border) !important;
+    /* 图片四周虚线框，略微提高可见度 */
+    border: 1px dashed rgba(255,255,255,0.5) !important;
     margin: 0 !important;
 }
 
@@ -1524,12 +1567,13 @@ body {
     content: none !important;
 }
 
-/* P0：导出态保护图片容器样式 */
+/* P0：导出态保护图片容器样式（tb-record-content 与 tb-export-content 共用） */
 .tb-card-view.is-exporting .tb-card-content .tb-img-wrapper,
 .tb-card-view.is-exporting .tb-img-wrapper {
     display: block !important;
     width: 100% !important;
     margin: 8px 0 12px 0 !important;
+    background: transparent !important;
     /* 禁止覆盖为全宽铺满 */
 }
 
@@ -1570,7 +1614,9 @@ body {
 }
 
 /* P0：导出预览复用黑板记录的样式（同源渲染） */
-.tb-card-content .tb-record {
+/* 主记录区用 .tb-record，cardView 导出用 .tb-export-record，两者样式一致 */
+.tb-card-content .tb-record,
+.tb-card-content .tb-export-record {
     position: relative;
     background: transparent;
     border: none;
@@ -1579,18 +1625,28 @@ body {
     border-bottom: var(--dashed-border);
 }
 
-.tb-card-content .tb-record:last-child {
+.tb-card-content .tb-record:last-child,
+.tb-card-content .tb-export-record:last-child {
     border-bottom: none;
 }
 
-.tb-card-content .tb-record-head {
+.tb-card-content .tb-record-head,
+.tb-card-content .tb-export-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 6px;
 }
 
-.tb-card-content .tb-record-index {
+/* 导出态：时间紧挨数字序号右侧 */
+.tb-card-view.is-exporting .tb-card-content .tb-record-head,
+.tb-card-view.is-exporting .tb-card-content .tb-export-head {
+    justify-content: flex-start !important;
+    gap: 8px !important;
+}
+
+.tb-card-content .tb-record-index,
+.tb-card-content .tb-export-index {
     font-weight: 600;
     font-size: 14px;
     color: var(--text);
@@ -1600,7 +1656,8 @@ body {
     font-family: "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Kalam", "Caveat", cursive;
 }
 
-.tb-card-content .tb-record-time {
+.tb-card-content .tb-record-time,
+.tb-card-content .tb-export-time {
     /* 字体分工优化：导出图片中时间数字使用手写体 */
     /* 手写体字体栈：内置 webfont → 次选手写体 → 系统字体 */
     font-family: "TodayBoardHandwriting", "Segoe Script", "Bradley Hand", "Comic Sans MS", "Kalam", "Caveat", cursive;
@@ -1609,7 +1666,8 @@ body {
     color: var(--muted);
 }
 
-.tb-card-content .tb-record-content {
+.tb-card-content .tb-record-content,
+.tb-card-content .tb-export-content {
     margin-top: 4px;
     white-space: pre-wrap;
     font-size: var(--tb-font-size); /* P0：统一字体基准 */
@@ -1624,8 +1682,9 @@ body {
     zoom: 1;
 }
 
-/* P0：导出预览中的图片样式与黑板完全一致 */
-.tb-card-content .tb-record-content img.todayboard-img {
+/* P0：导出预览中的图片样式与黑板完全一致（cardView 用 tb-export-content，主记录用 tb-record-content） */
+.tb-card-content .tb-record-content img.todayboard-img,
+.tb-card-content .tb-export-content img.todayboard-img {
     max-width: 70%;
     width: auto;
     height: auto;
@@ -1636,7 +1695,8 @@ body {
     vertical-align: middle;
 }
 
-.tb-card-content .tb-record-content img.todayboard-img {
+.tb-card-content .tb-record-content img.todayboard-img,
+.tb-card-content .tb-export-content img.todayboard-img {
     max-height: 300px;
     object-fit: contain;
 }
