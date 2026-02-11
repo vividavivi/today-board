@@ -5341,30 +5341,33 @@ function openEditor(mode, idx) {
                         // 增加 padding-bottom 保证 border 在安全区内，防止 html2canvas 边界裁剪
                         cloneFooter.style.paddingBottom = '24px';
                     }
+                    
+                    // 关键修复：基于封口线真实位置重新计算容器高度（确定性规则）
+                    var footerRect = cloneFooter ? cloneFooter.getBoundingClientRect() : null;
+                    var containerRect = clonedContainer.getBoundingClientRect();
+                    var sealBottomCss = footerRect ? (footerRect.bottom - containerRect.top) : contentBottomCss;
+                    var SEAL_PAD = 8; // 封口线安全区：固定 8px
+                    var finalCssH = Math.max(contentBottomCss + 46, sealBottomCss + SEAL_PAD);
+                    
+                    // 更新 clone 容器高度为确定值（包含封口线 + 安全区）
+                    clonedContainer.style.height = finalCssH + 'px';
+                    clonedContainer.style.minHeight = finalCssH + 'px';
                     // #region agent log
                     try {
                         var cloneCs = win && win.getComputedStyle ? win.getComputedStyle(clonedContainer) : null;
                         var footerCs = cloneFooter && win.getComputedStyle ? win.getComputedStyle(cloneFooter) : null;
-                        var footerRect = cloneFooter ? cloneFooter.getBoundingClientRect() : null;
-                        var containerRect = clonedContainer.getBoundingClientRect();
-                        var sealBottomCss = footerRect ? (footerRect.bottom - containerRect.top) : 0;
                         var logData = {
                             hasIsExporting: clonedContainer.classList.contains('is-exporting'),
-                            borderTop: cloneCs ? cloneCs.borderTop : 'n/a',
-                            borderRight: cloneCs ? cloneCs.borderRight : 'n/a',
-                            borderBottom: cloneCs ? cloneCs.borderBottom : 'n/a',
-                            borderLeft: cloneCs ? cloneCs.borderLeft : 'n/a',
                             footerBorderBottom: footerCs ? footerCs.borderBottom : 'n/a',
                             footerPaddingBottom: footerCs ? footerCs.paddingBottom : 'n/a',
-                            boxShadow: cloneCs ? cloneCs.boxShadow : 'n/a',
-                            outline: cloneCs ? cloneCs.outline : 'n/a',
-                            naturalHeightCss: naturalHeightCss,
                             contentBottomCss: contentBottomCss,
                             sealBottomCss: sealBottomCss,
-                            safetyPad: naturalHeightCss - sealBottomCss,
-                            PAD: 46
+                            SEAL_PAD: 8,
+                            finalCssH: finalCssH,
+                            safetyMargin: finalCssH - sealBottomCss,
+                            originalNaturalH: naturalHeightCss
                         };
-                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:onclone','message':'clone border/computed',data:logData,timestamp:Date.now(),hypothesisId:'H3,H4,H5',runId:'post-fix'})}).catch(function(){});
+                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:onclone-SEAL',message:'[TB-SEAL] deterministic',data:logData,timestamp:Date.now(),runId:'seal-fix'})}).catch(function(){});
                     } catch (e) {}
                     // #endregion
                     var exportModeStyle = clonedDoc.createElement('style');
