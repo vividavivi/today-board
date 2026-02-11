@@ -5328,22 +5328,32 @@ function openEditor(mode, idx) {
                     clonedContainer.style.margin = '0';
                     clonedContainer.style.outline = 'none';
                     clonedContainer.style.boxShadow = 'none';
+                    // 内联强制边框，防止 base 样式叠加导致顶部重叠
+                    clonedContainer.style.border = 'none';
+                    clonedContainer.style.borderTop = '2px dashed rgba(255,255,255,0.6)';
+                    clonedContainer.style.borderRight = '2px dashed rgba(255,255,255,0.6)';
+                    clonedContainer.style.borderLeft = '2px dashed rgba(255,255,255,0.6)';
+                    clonedContainer.style.borderBottom = 'none';
+                    var cloneFooter = clonedContainer.querySelector('.tb-card-footer');
+                    if (cloneFooter) cloneFooter.style.borderBottom = '2px dashed rgba(255,255,255,0.6)';
                     // #region agent log
                     try {
                         var cloneCs = win && win.getComputedStyle ? win.getComputedStyle(clonedContainer) : null;
+                        var footerCs = cloneFooter && win.getComputedStyle ? win.getComputedStyle(cloneFooter) : null;
                         var logData = {
                             hasIsExporting: clonedContainer.classList.contains('is-exporting'),
                             borderTop: cloneCs ? cloneCs.borderTop : 'n/a',
                             borderRight: cloneCs ? cloneCs.borderRight : 'n/a',
                             borderBottom: cloneCs ? cloneCs.borderBottom : 'n/a',
                             borderLeft: cloneCs ? cloneCs.borderLeft : 'n/a',
+                            footerBorderBottom: footerCs ? footerCs.borderBottom : 'n/a',
                             boxShadow: cloneCs ? cloneCs.boxShadow : 'n/a',
                             outline: cloneCs ? cloneCs.outline : 'n/a',
                             naturalHeightCss: naturalHeightCss,
                             contentBottomCss: contentBottomCss,
                             PAD: 32
                         };
-                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:onclone','message':'clone border/computed',data:logData,timestamp:Date.now(),hypothesisId:'H3,H4,H5'})}).catch(function(){});
+                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:onclone','message':'clone border/computed',data:logData,timestamp:Date.now(),hypothesisId:'H3,H4,H5',runId:'post-fix'})}).catch(function(){});
                     } catch (e) {}
                     // #endregion
                     var exportModeStyle = clonedDoc.createElement('style');

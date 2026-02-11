@@ -1435,26 +1435,26 @@ body {
     max-height: none !important;
 }
 
-/* 导出态：四周加粗虚线框（单层），顶/左/右/底均为 2px 粗虚线 */
+/* 导出态：顶/左/右由 card-view 绘制，底部由 footer 绘制，避免 html2canvas 裁切底边 */
 .tb-card-view.is-exporting {
     padding-top: 12px !important;
     padding-bottom: 24px !important;
     border: none !important;
     border-top: 2px dashed rgba(255,255,255,0.6) !important;
     border-right: 2px dashed rgba(255,255,255,0.6) !important;
-    border-bottom: 2px dashed rgba(255,255,255,0.6) !important;
+    border-bottom: none !important;
     border-left: 2px dashed rgba(255,255,255,0.6) !important;
     outline: none !important;
 }
-/* 顶部仅 card-view 粗虚线外框，header 下方细分隔线保留 */
+/* 顶部防重叠：移除 header 顶部边框，保留 header 下方细分隔线 */
 .tb-card-view.is-exporting .tb-card-header {
     border-top: none !important;
 }
-/* footer 仅保留 content 分隔线，底部粗框由 card-view 统一绘制 */
+/* 底部粗虚线由 footer 绘制，确保在内容区内不被裁切 */
 .tb-card-view.is-exporting .tb-card-footer {
     padding-bottom: 20px !important;
     border-top: var(--dashed-border) !important;
-    border-bottom: none !important;
+    border-bottom: 2px dashed rgba(255,255,255,0.6) !important;
 }
 .tb-card-view {
     background: transparent;
