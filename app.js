@@ -5196,7 +5196,8 @@ function openEditor(mode, idx) {
         exportModeMeasureStyle.textContent = '.tb-export-mode { min-height: 0 !important; height: auto !important; max-height: none !important; padding-bottom: 0 !important; }\n.tb-export-mode .tb-export-record,\n.tb-export-mode .tb-record-list { min-height: 0 !important; height: auto !important; max-height: none !important; flex: none !important; flex-grow: 0 !important; padding-bottom: 0 !important; }';
         document.head.appendChild(exportModeMeasureStyle);
         var contentBottomCss = getVisibleContentBottom(exportContainer);
-        var PAD = 32;
+        // PAD 需包含：card-view padding-bottom(24) + footer border-bottom(2) + 安全区(10-20)
+        var PAD = 46;
         var targetCssHeight = contentBottomCss + PAD;
         exportContainer.classList.remove('tb-export-mode');
         exportModeMeasureStyle.remove();
@@ -5335,11 +5336,18 @@ function openEditor(mode, idx) {
                     clonedContainer.style.borderLeft = '2px dashed rgba(255,255,255,0.6)';
                     clonedContainer.style.borderBottom = 'none';
                     var cloneFooter = clonedContainer.querySelector('.tb-card-footer');
-                    if (cloneFooter) cloneFooter.style.borderBottom = '2px dashed rgba(255,255,255,0.6)';
+                    if (cloneFooter) {
+                        cloneFooter.style.borderBottom = '2px dashed rgba(255,255,255,0.6)';
+                        // 增加 padding-bottom 保证 border 在安全区内，防止 html2canvas 边界裁剪
+                        cloneFooter.style.paddingBottom = '24px';
+                    }
                     // #region agent log
                     try {
                         var cloneCs = win && win.getComputedStyle ? win.getComputedStyle(clonedContainer) : null;
                         var footerCs = cloneFooter && win.getComputedStyle ? win.getComputedStyle(cloneFooter) : null;
+                        var footerRect = cloneFooter ? cloneFooter.getBoundingClientRect() : null;
+                        var containerRect = clonedContainer.getBoundingClientRect();
+                        var sealBottomCss = footerRect ? (footerRect.bottom - containerRect.top) : 0;
                         var logData = {
                             hasIsExporting: clonedContainer.classList.contains('is-exporting'),
                             borderTop: cloneCs ? cloneCs.borderTop : 'n/a',
@@ -5347,11 +5355,14 @@ function openEditor(mode, idx) {
                             borderBottom: cloneCs ? cloneCs.borderBottom : 'n/a',
                             borderLeft: cloneCs ? cloneCs.borderLeft : 'n/a',
                             footerBorderBottom: footerCs ? footerCs.borderBottom : 'n/a',
+                            footerPaddingBottom: footerCs ? footerCs.paddingBottom : 'n/a',
                             boxShadow: cloneCs ? cloneCs.boxShadow : 'n/a',
                             outline: cloneCs ? cloneCs.outline : 'n/a',
                             naturalHeightCss: naturalHeightCss,
                             contentBottomCss: contentBottomCss,
-                            PAD: 32
+                            sealBottomCss: sealBottomCss,
+                            safetyPad: naturalHeightCss - sealBottomCss,
+                            PAD: 46
                         };
                         fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:onclone','message':'clone border/computed',data:logData,timestamp:Date.now(),hypothesisId:'H3,H4,H5',runId:'post-fix'})}).catch(function(){});
                     } catch (e) {}
