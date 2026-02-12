@@ -1,45 +1,83 @@
-const CACHE = 'todayboard-v1-20260101';
-const ASSETS = [
-  '/today-board/mobile.html',
-  '/today-board/app.js',
-  '/today-board/styles-v2.css',
-  '/today-board/styles-enhanced.css',
-  '/today-board/assets/bg/bg_blackboard_main.webp',
-  '/today-board/assets/bg/bg_blackboard_main_lite.webp',
-  '/today-board/assets/ui/badge_version.webp',
-  '/today-board/assets/ui/btn_circle_chalk_base.webp',
-  '/today-board/assets/ui/btn_console_add.webp.webp',
-  '/today-board/assets/ui/btn_console_delete.webp',
-  '/today-board/assets/ui/btn_console_submit.webp',
-  '/today-board/assets/ui/divider_chalk_horizontal.webp',
-  '/today-board/assets/ui/frame_chalk_dashed.webp',
-  '/today-board/assets/ui/icon_chalk_back.webp',
-  '/today-board/assets/ui/icon_chalk_camera.webp',
-  '/today-board/assets/ui/icon_chalk_confirm.webp',
-  '/today-board/assets/ui/icon_chalk_gallery.webp',
-  '/today-board/assets/ui/icon_chalk_grid.webp',
-  '/today-board/assets/ui/icon_chalk_mic.webp',
-  '/today-board/assets/ui/icon_chalk_redo.webp',
-  '/today-board/assets/ui/icon_chalk_text.webp',
-  '/today-board/assets/ui/icon_chalk_undo.webp',
-  '/today-board/assets/ui/icon_check_circle_64.webp',
-  '/today-board/assets/ui/icon_check_circle_96.webp',
-  '/today-board/assets/ui/title_today_board.webp'
+const CACHE_VERSION = '2026-02-12';
+const CACHE_NAME = 'todayboard-' + CACHE_VERSION;
+
+const STATIC_ASSETS = [
+  './app.js',
+  './styles-v2.css',
+  './styles-enhanced.css',
+  './assets/bg/bg_blackboard_main.webp',
+  './assets/bg/bg_blackboard_main_lite.webp',
+  './assets/ui/badge_version.webp',
+  './assets/ui/btn_circle_chalk_base.webp',
+  './assets/ui/btn_console_add.webp.webp',
+  './assets/ui/btn_console_delete.webp',
+  './assets/ui/btn_console_submit.webp',
+  './assets/ui/divider_chalk_horizontal.webp',
+  './assets/ui/frame_chalk_dashed.webp',
+  './assets/ui/icon_chalk_back.webp',
+  './assets/ui/icon_chalk_camera.webp',
+  './assets/ui/icon_chalk_confirm.webp',
+  './assets/ui/icon_chalk_gallery.webp',
+  './assets/ui/icon_chalk_grid.webp',
+  './assets/ui/icon_chalk_mic.webp',
+  './assets/ui/icon_chalk_redo.webp',
+  './assets/ui/icon_chalk_text.webp',
+  './assets/ui/icon_chalk_undo.webp',
+  './assets/ui/icon_check_circle_64.webp',
+  './assets/ui/icon_check_circle_96.webp',
+  './assets/ui/title_today_board.webp'
 ];
 
+function isHtmlRequest(request) {
+  return request.mode === 'navigate' || request.destination === 'document';
+}
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+  e.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((c) => c.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
+      .catch(() => {})
+  );
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+    Promise.all([
+      caches.keys().then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      ),
+      self.clients.claim()
+    ])
   );
 });
 
 self.addEventListener('fetch', (e) => {
-  e.respondWith(caches.match(e.request).then((res) => res || fetch(e.request)));
-});
+  if (e.request.method !== 'GET') return;
 
+    if (isHtmlRequest(e.request)) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(e.request, clone)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  e.respondWith(
+    caches.match(e.request).then((cached) =>
+      cached || fetch(e.request).then((res) => {
+        if (!res || res.status !== 200 || res.type !== 'basic') return res;
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then((c) => c.put(e.request, clone)).catch(() => {});
+        return res;
+      })
+    )
+  );
+});
