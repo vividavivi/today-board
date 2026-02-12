@@ -5068,7 +5068,13 @@ function openEditor(mode, idx) {
         var bgDataUrl = null;
         try {
             bgDataUrl = await imageUrlToDataUrl(bgImageAbsoluteUrl);
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:5070',message:'bgDataUrl转换成功',data:{bgDataUrlPrefix:bgDataUrl?bgDataUrl.substring(0,50):null,isDataUrl:bgDataUrl&&bgDataUrl.indexOf('data:')===0,length:bgDataUrl?bgDataUrl.length:0},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A,B'})}).catch(()=>{});
+            // #endregion
         } catch (e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:5072',message:'bgDataUrl转换失败',data:{url:bgImageAbsoluteUrl,error:e.message},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A,B'})}).catch(()=>{});
+            // #endregion
             console.error('导出背景图转 data URL 失败，导出终止（规则禁止纯色背景）', { url: bgImageAbsoluteUrl, message: e && e.message, exception: e });
             throw new Error('导出背景图 bg_blackboard_main.webp 无法转为 data URL，请使用 http(s) 协议打开页面后重试');
         }
@@ -5117,25 +5123,86 @@ function openEditor(mode, idx) {
                     clonedContainer.classList.add('is-exporting');
 
                     // A) 背景：必须使用 data URL，禁止纯色
+                    // #region agent log
+                    var logData1 = {location:'app.js:5119',message:'onclone开始:检查bgDataUrl',data:{bgDataUrlType:typeof bgDataUrl,bgDataUrlIsNull:bgDataUrl===null,bgDataUrlIsUndefined:bgDataUrl===undefined,bgDataUrlPrefix:bgDataUrl?bgDataUrl.substring(0,50):null,hasWin:!!win,hasGetComputedStyle:win&&!!win.getComputedStyle},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A,E'};
+                    console.log('[TB-DEBUG]', logData1);
+                    fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData1)}).catch(()=>{});
+                    // #endregion
                     var exportBgUrl = (typeof bgDataUrl === 'string' && bgDataUrl.indexOf('data:') === 0)
                         ? bgDataUrl
                         : null;
                     if (!exportBgUrl) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:5123',message:'exportBgUrl无效',data:{bgDataUrlType:typeof bgDataUrl,bgDataUrlPrefix:bgDataUrl?bgDataUrl.substring(0,50):null},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+                        // #endregion
                         throw new Error('导出背景必须为 data URL，当前 bgDataUrl 无效');
                     }
                     var safeUrl = exportBgUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    // 先设置内联样式作为备用
                     clonedContainer.style.backgroundImage = 'url("' + safeUrl + '")';
                     clonedContainer.style.backgroundSize = 'cover';
                     clonedContainer.style.backgroundPosition = 'center';
                     clonedContainer.style.backgroundRepeat = 'no-repeat';
+                    // #region agent log
+                    fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:5141',message:'设置内联backgroundImage后',data:{inlineStyle:clonedContainer.style.backgroundImage,safeUrlPrefix:safeUrl.substring(0,50)},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'C,D'})}).catch(()=>{});
+                    // #endregion
+                    
+                    // 关键修复：先添加 tb-export-mode class，然后注入CSS样式来覆盖 .is-exporting 的 !important 规则
+                    clonedContainer.classList.add('tb-export-mode');
+                    var exportModeStyle = clonedDoc.createElement('style');
+                    exportModeStyle.setAttribute('data-export-mode', '1');
+                    var safeUrlForCss = exportBgUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    exportModeStyle.textContent =
+                        '.tb-export-mode, .tb-export-mode * {' +
+                            'filter: none !important;' +
+                            'backdrop-filter: none !important;' +
+                            '-webkit-backdrop-filter: none !important;' +
+                            'mix-blend-mode: normal !important;' +
+                            'mask: none !important;' +
+                            '-webkit-mask: none !important;' +
+                            'background-blend-mode: normal !important;' +
+                            'transform: none !important;' +
+                        '}' +
+                        // 关键修复：覆盖 .tb-card-view.is-exporting 的 background-image，强制使用 data URL
+                        '.tb-card-view.is-exporting.tb-export-mode {' +
+                            'background-image: url("' + safeUrlForCss + '") !important;' +
+                            'background-size: cover !important;' +
+                            'background-position: center !important;' +
+                            'background-repeat: no-repeat !important;' +
+                        '}' +
+                        '.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after,' +
+                        '.tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after,' +
+                        '.tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after,' +
+                        '.tb-export-mode .tb-btn::after,' +
+                        '.tb-export-mode .tb-empty::before,' +
+                        '.tb-export-mode .tb-pin-btn::before,' +
+                        '.tb-export-mode .tb-thumb::before {' +
+                            'display: none !important;' +
+                            'content: none !important;' +
+                        '}';
+                    head.appendChild(exportModeStyle);
+                    // #region agent log
+                    var bgComputedAfterCss = (win && win.getComputedStyle) ? win.getComputedStyle(clonedContainer).backgroundImage : '';
+                    fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:5175',message:'注入CSS后检查backgroundImage',data:{bgComputedAfterCss:bgComputedAfterCss,hasDataImage:bgComputedAfterCss&&bgComputedAfterCss.indexOf('data:image')!==-1},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
 
                     var bgComputed = (win && win.getComputedStyle) ? win.getComputedStyle(clonedContainer).backgroundImage : '';
+                    // #region agent log
+                    var logData2 = {location:'app.js:5132',message:'getComputedStyle结果',data:{bgComputed:bgComputed,bgComputedLength:bgComputed?bgComputed.length:0,hasDataImage:bgComputed&&bgComputed.indexOf('data:image')!==-1,hasDataColon:bgComputed&&bgComputed.indexOf('data:')!==-1,hasUrl:bgComputed&&bgComputed.indexOf('url')!==-1},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'C,E'};
+                    console.log('[TB-DEBUG]', logData2);
+                    fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData2)}).catch(()=>{});
+                    // #endregion
                     if (bgComputed.indexOf('data:image') === -1) {
+                        // #region agent log
+                        var logData3 = {location:'app.js:5133',message:'data URL检查失败',data:{bgComputed:bgComputed,exportBgUrlPrefix:exportBgUrl.substring(0,50),inlineStyle:clonedContainer.style.backgroundImage},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'C'};
+                        console.error('[TB-DEBUG]', logData3);
+                        fetch('http://127.0.0.1:7243/ingest/a11b6c32-3942-4660-9c8b-9fa7d3127c4a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData3)}).catch(()=>{});
+                        // #endregion
                         throw new Error('导出背景未正确应用 data URL');
                     }
 
                     // B) 导出态：遵循改变高度前规则，强制 clone 固定宽度 EXPORT_WIDTH、高度 naturalHeightCss
-                    clonedContainer.classList.add('tb-export-mode');
+                    // 注意：tb-export-mode class 已在上面添加，这里不再重复添加
                     clonedContainer.style.width = exportWidth + 'px';
                     clonedContainer.style.maxWidth = exportWidth + 'px';
                     clonedContainer.style.minWidth = exportWidth + 'px';
@@ -5170,30 +5237,7 @@ function openEditor(mode, idx) {
                     clonedContainer.style.minHeight = finalCssH + 'px';
                     exportCropMetrics.rootScrollHeightCss = finalCssH;
                     exportCropMetrics.targetCssHeight = finalCssH;
-                    var exportModeStyle = clonedDoc.createElement('style');
-                    exportModeStyle.setAttribute('data-export-mode', '1');
-                    exportModeStyle.textContent =
-                        '.tb-export-mode, .tb-export-mode * {' +
-                            'filter: none !important;' +
-                            'backdrop-filter: none !important;' +
-                            '-webkit-backdrop-filter: none !important;' +
-                            'mix-blend-mode: normal !important;' +
-                            'mask: none !important;' +
-                            '-webkit-mask: none !important;' +
-                            'background-blend-mode: normal !important;' +
-                            'transform: none !important;' +
-                        '}' +
-                        '.tb-export-mode .tb-record::before, .tb-export-mode .tb-record::after,' +
-                        '.tb-export-mode .tb-export-record::before, .tb-export-mode .tb-export-record::after,' +
-                        '.tb-export-mode .tb-divider::before, .tb-export-mode .tb-divider::after,' +
-                        '.tb-export-mode .tb-btn::after,' +
-                        '.tb-export-mode .tb-empty::before,' +
-                        '.tb-export-mode .tb-pin-btn::before,' +
-                        '.tb-export-mode .tb-thumb::before {' +
-                            'display: none !important;' +
-                            'content: none !important;' +
-                        '}';
-                    head.appendChild(exportModeStyle);
+                    // 注意：exportModeStyle 已在上面创建并注入，这里不再重复
 
                     // B2) 便签图片：不覆盖样式，100% 复用页面态布局（max-width:70% / width:auto / height:auto 来自 styles-v2.css）
                     // 禁止在 clone 中重新计算图片尺寸，导出 = 高分辨率截图
