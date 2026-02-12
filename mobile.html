@@ -21,7 +21,8 @@
             <h2 class="tb-guide-title">欢迎来到 Today Board</h2>
             <p class="tb-guide-text">
                 把每天的灵感、待办、心情写进黑板。<br />
-                支持文字、图片，一键导出分享。
+                支持文字、图片，一键导出分享。<br />
+                每日 0 点自动擦除黑板（保留置顶便签）。
             </p>
             <button id="guideConfirmBtn" class="tb-btn tb-primary">我知道了</button>
         </div>
@@ -76,14 +77,17 @@
                 </button>
             </div>
             <div class="tb-more-content">
-                <div class="tb-more-build" id="moreBuildDate">Build 2025.12.31</div>
+                <div class="tb-more-build" id="moreBuildDate">Build 2026.02.12</div>
                 <div class="tb-more-info">
                     <p>数据仅保存在本地设备</p>
                     <p>导出图片将保存到系统相册/Downloads</p>
                 </div>
                 <button id="moreBackupBtn" class="tb-more-feedback-btn" style="margin-bottom: 12px;">备份数据（导出 JSON）</button>
                 <button id="moreRestoreBtn" class="tb-more-feedback-btn" style="margin-bottom: 12px;">恢复数据（导入 JSON）</button>
-                <button id="moreFeedbackBtn" class="tb-more-feedback-btn">问题反馈</button>
+                <div class="tb-more-feedback-text">
+                    <p>问题反馈 / Bug 反馈：todayboard@163.com</p>
+                    <p>更多更新说明：关注公众号 vividavivi</p>
+                </div>
             </div>
         </div>
     </section>
@@ -228,7 +232,16 @@
     <script src="./app.js?v=20251230"></script>
     <script>
       if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
-        navigator.serviceWorker.register('./sw.js').catch(function () {});
+        navigator.serviceWorker.register('./sw.js').then(function (reg) {
+          navigator.serviceWorker.addEventListener('controllerchange', function () {
+            var banner = document.createElement('div');
+            banner.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;z-index:99999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+            banner.innerHTML = '<span>发现新版本</span><button style="background:#65B86A;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:13px;">刷新</button>';
+            banner.querySelector('button').onclick = function () { location.reload(); };
+            document.body.appendChild(banner);
+            setTimeout(function () { banner.remove(); }, 10000);
+          });
+        }).catch(function () {});
       }
     </script>
   </body>
